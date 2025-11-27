@@ -2,7 +2,7 @@
 
 A comprehensive game server hosting dashboard that integrates with Pterodactyl Panel, featuring a coin-based economy system for users to earn and spend coins on server resources.
 
-**Repository**: [https://github.com/Shaf2665/AETHER_PANEL](https://github.com/Shaf2665/AETHER_PANEL)
+**Repository**: [https://github.com/Shaf2665/AETHER_DASHBOARD](https://github.com/Shaf2665/AETHER_DASHBOARD)
 
 ## Features
 
@@ -72,8 +72,8 @@ Aether Dashboard is designed to run in Docker containers. This is the recommende
 The easiest way to install Aether Dashboard is using our interactive setup wizard:
 
 ```bash
-git clone https://github.com/Shaf2665/AETHER_PANEL.git
-cd AETHER_PANEL
+git clone https://github.com/Shaf2665/AETHER_DASHBOARD.git
+cd AETHER_DASHBOARD
 ./setup.sh
 ```
 
@@ -94,8 +94,8 @@ If you prefer to configure manually:
 
 1. **Clone the repository:**
 ```bash
-git clone https://github.com/Shaf2665/AETHER_PANEL.git
-cd AETHER_PANEL
+git clone https://github.com/Shaf2665/AETHER_DASHBOARD.git
+cd AETHER_DASHBOARD
 ```
 
 2. **Create environment file:**
