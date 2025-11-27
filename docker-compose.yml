@@ -1,0 +1,104 @@
+version: '3.8'
+
+services:
+  aether-panel:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: aether-panel
+    restart: unless-stopped
+    ports:
+      - "${PANEL_PORT:-5000}:5000"
+    environment:
+      - NODE_ENV=production
+      - PORT=5000
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=${DB_NAME:-aether_panel}
+      - DB_USER=${DB_USER:-postgres}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-}
+      - REDIS_ENABLED=${REDIS_ENABLED:-true}
+      - JWT_SECRET=${JWT_SECRET}
+      - PTERODACTYL_URL=${PTERODACTYL_URL}
+      - PTERODACTYL_API_KEY=${PTERODACTYL_API_KEY}
+      - PTERODACTYL_CLIENT_API_KEY=${PTERODACTYL_CLIENT_API_KEY}
+      - PTERODACTYL_APPLICATION_API_KEY=${PTERODACTYL_APPLICATION_API_KEY}
+      - LINKVERTISE_ENABLED=${LINKVERTISE_ENABLED:-true}
+      - LINKVERTISE_API_KEY=${LINKVERTISE_API_KEY:-}
+      - LINKVERTISE_COINS=${LINKVERTISE_COINS:-50}
+      - LINKVERTISE_COOLDOWN=${LINKVERTISE_COOLDOWN:-30}
+      - AFK_ENABLED=${AFK_ENABLED:-true}
+      - AFK_COINS_PER_MINUTE=${AFK_COINS_PER_MINUTE:-1}
+      - AFK_MAX_MINUTES=${AFK_MAX_MINUTES:-60}
+      - AFK_COOLDOWN=${AFK_COOLDOWN:-15}
+      - SURVEYS_ENABLED=${SURVEYS_ENABLED:-true}
+      - SURVEY_MIN_COINS=${SURVEY_MIN_COINS:-100}
+      - SURVEY_MAX_COINS=${SURVEY_MAX_COINS:-500}
+      - ADS_ENABLED=${ADS_ENABLED:-true}
+      - ADS_COINS_PER_VIEW=${ADS_COINS_PER_VIEW:-10}
+      - ADS_MAX_VIEWS=${ADS_MAX_VIEWS:-20}
+      - REFERRAL_ENABLED=${REFERRAL_ENABLED:-true}
+      - REFERRAL_BONUS=${REFERRAL_BONUS:-500}
+      - REFERRAL_COMMISSION=${REFERRAL_COMMISSION:-10}
+      - DAILY_LOGIN_ENABLED=${DAILY_LOGIN_ENABLED:-true}
+      - DAILY_LOGIN_COINS=${DAILY_LOGIN_COINS:-25}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    networks:
+      - aether-network
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:5000/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  postgres:
+    image: postgres:15-alpine
+    container_name: aether-postgres
+    restart: unless-stopped
+    environment:
+      - POSTGRES_DB=${DB_NAME:-aether_panel}
+      - POSTGRES_USER=${DB_USER:-postgres}
+      - POSTGRES_PASSWORD=${DB_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - aether-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-postgres}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: aether-redis
+    restart: unless-stopped
+    command: redis-server --requirepass ${REDIS_PASSWORD:-} --appendonly yes
+    volumes:
+      - redis_data:/data
+    networks:
+      - aether-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+
+networks:
+  aether-network:
+    driver: bridge
+
