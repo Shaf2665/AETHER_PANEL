@@ -1,4 +1,4 @@
-# Multi-stage Dockerfile for Aether Panel
+# Multi-stage Dockerfile for Aether Dashboard
 # Stage 1: Build React frontend
 FROM node:18-alpine AS frontend-builder
 

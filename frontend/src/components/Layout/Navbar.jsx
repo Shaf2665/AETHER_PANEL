@@ -17,7 +17,7 @@ const Navbar = () => {
       <div className="px-6 py-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center">
-            <h1 className="text-2xl font-bold text-gray-900">Aether Panel</h1>
+            <h1 className="text-2xl font-bold text-gray-900">Aether Dashboard</h1>
           </div>
           <div className="flex items-center space-x-6">
             <div className="flex items-center space-x-2">

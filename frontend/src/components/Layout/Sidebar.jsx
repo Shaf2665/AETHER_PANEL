@@ -20,7 +20,7 @@ const Sidebar = () => {
   return (
     <div className="w-64 bg-gray-900 min-h-screen">
       <div className="p-6">
-        <h2 className="text-white text-xl font-bold">Aether Panel</h2>
+        <h2 className="text-white text-xl font-bold">Aether Dashboard</h2>
       </div>
       <nav className="px-3">
         {navigation.map((item) => {

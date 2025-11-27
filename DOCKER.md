@@ -1,6 +1,6 @@
-# Docker Setup Guide for Aether Panel
+# Docker Setup Guide for Aether Dashboard
 
-This guide explains how to build and run Aether Panel using Docker in a single container setup.
+This guide explains how to build and run Aether Dashboard using Docker in a single container setup.
 
 ## Prerequisites
 
@@ -13,7 +13,7 @@ This guide explains how to build and run Aether Panel using Docker in a single c
 ### 1. Clone and Navigate
 
 ```bash
-cd aether-panel
+cd aether-dashboard
 ```
 
 ### 2. Create Environment File
@@ -31,7 +31,7 @@ PORT=5000
 JWT_SECRET=your-super-secret-jwt-key-change-this-in-production
 
 # Database Configuration
-DB_NAME=aether_panel
+DB_NAME=aether_dashboard
 DB_USER=postgres
 DB_PASSWORD=your-database-password
 
@@ -68,15 +68,15 @@ docker-compose up -d
 ```
 
 This will:
-- Build the Aether Panel container
+- Build the Aether Dashboard container
 - Start PostgreSQL database
 - Start Redis cache
-- Start the Aether Panel application
+- Start the Aether Dashboard application
 
 ### 4. Run Database Migrations
 
 ```bash
-docker-compose exec aether-panel npm run migrate
+docker-compose exec aether-dashboard npm run migrate
 ```
 
 ### 5. Access the Application
@@ -92,18 +92,18 @@ If you prefer to build and run manually without docker-compose:
 ### Build the Image
 
 ```bash
-docker build -t aether-panel:latest .
+docker build -t aether-dashboard:latest .
 ```
 
 ### Run the Container
 
 ```bash
 docker run -d \
-  --name aether-panel \
+  --name aether-dashboard \
   -p 5000:5000 \
   --env-file .env \
   --network aether-network \
-  aether-panel:latest
+  aether-dashboard:latest
 ```
 
 **Note**: You'll need to set up PostgreSQL and Redis separately when running manually.
@@ -112,7 +112,7 @@ docker run -d \
 
 ### Services
 
-- **aether-panel**: Main application container (backend + frontend)
+- **aether-dashboard**: Main application container (backend + frontend)
 - **postgres**: PostgreSQL database
 - **redis**: Redis cache for sessions
 
@@ -145,20 +145,20 @@ PANEL_PORT=8080
 docker-compose logs -f
 
 # Specific service
-docker-compose logs -f aether-panel
+docker-compose logs -f aether-dashboard
 ```
 
 ### Execute Commands in Container
 
 ```bash
 # Run migrations
-docker-compose exec aether-panel npm run migrate
+docker-compose exec aether-dashboard npm run migrate
 
 # Access shell
-docker-compose exec aether-panel sh
+docker-compose exec aether-dashboard sh
 
 # Check database connection
-docker-compose exec aether-panel node -e "require('./src/config/database')"
+docker-compose exec aether-dashboard node -e "require('./src/config/database')"
 ```
 
 ### Rebuild After Changes
@@ -214,7 +214,7 @@ REDIS_PASSWORD=<strong-redis-password>
 
 ### Container Won't Start
 
-1. Check logs: `docker-compose logs aether-panel`
+1. Check logs: `docker-compose logs aether-dashboard`
 2. Verify environment variables are set correctly
 3. Ensure ports are not already in use
 4. Check database connectivity
@@ -227,7 +227,7 @@ REDIS_PASSWORD=<strong-redis-password>
 
 ### Frontend Not Loading
 
-1. Verify build completed successfully: `docker-compose logs aether-panel | grep build`
+1. Verify build completed successfully: `docker-compose logs aether-dashboard | grep build`
 2. Check that static files are being served
 3. Verify API routes are working: `curl http://localhost:5000/api/health`
 
@@ -257,13 +257,13 @@ docker-compose ps
 ### Backup Database
 
 ```bash
-docker-compose exec postgres pg_dump -U postgres aether_panel > backup.sql
+docker-compose exec postgres pg_dump -U postgres aether_dashboard > backup.sql
 ```
 
 ### Restore Database
 
 ```bash
-docker-compose exec -T postgres psql -U postgres aether_panel < backup.sql
+docker-compose exec -T postgres psql -U postgres aether_dashboard < backup.sql
 ```
 
 ### Backup Redis
@@ -276,7 +276,7 @@ docker-compose exec redis redis-cli --rdb /data/dump.rdb
 
 1. Pull latest code
 2. Rebuild container: `docker-compose up -d --build`
-3. Run migrations if needed: `docker-compose exec aether-panel npm run migrate`
+3. Run migrations if needed: `docker-compose exec aether-dashboard npm run migrate`
 4. Restart services: `docker-compose restart`
 
 ## Cleanup
@@ -296,7 +296,7 @@ docker-compose down -v
 ### Remove Images
 
 ```bash
-docker rmi aether-panel:latest
+docker rmi aether-dashboard:latest
 ```
 
 ## Additional Resources

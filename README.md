@@ -1,4 +1,4 @@
-# Aether Panel - Game Server Hosting Dashboard
+# Aether Dashboard - Game Server Hosting Dashboard
 
 A comprehensive game server hosting dashboard that integrates with Pterodactyl Panel, featuring a coin-based economy system for users to earn and spend coins on server resources.
 
@@ -35,7 +35,7 @@ A comprehensive game server hosting dashboard that integrates with Pterodactyl P
 ## Project Structure
 
 ```
-aether-panel/
+aether-dashboard/
 ├── backend/          # Express API server
 │   ├── src/
 │   │   ├── config/   # Configuration files
@@ -59,7 +59,7 @@ aether-panel/
 
 ## Installation
 
-Aether Panel is designed to run in Docker containers. This is the recommended and primary installation method.
+Aether Dashboard is designed to run in Docker containers. This is the recommended and primary installation method.
 
 ### Prerequisites
 
@@ -69,7 +69,7 @@ Aether Panel is designed to run in Docker containers. This is the recommended an
 
 ### 🚀 Quick Start (Recommended)
 
-The easiest way to install Aether Panel is using our interactive setup wizard:
+The easiest way to install Aether Dashboard is using our interactive setup wizard:
 
 ```bash
 git clone https://github.com/Shaf2665/AETHER_PANEL.git
@@ -109,7 +109,7 @@ PORT=5000
 JWT_SECRET=your-super-secret-jwt-key-minimum-32-characters
 
 # Database Configuration
-DB_NAME=aether_panel
+DB_NAME=aether_dashboard
 DB_USER=postgres
 DB_PASSWORD=your-secure-database-password
 
@@ -142,7 +142,7 @@ docker-compose up -d
 
 5. **Run database migrations:**
 ```bash
-docker-compose exec aether-panel npm run migrate
+docker-compose exec aether-dashboard npm run migrate
 ```
 
 6. **Access the application:**
@@ -153,7 +153,7 @@ docker-compose exec aether-panel npm run migrate
 
 ```bash
 # View logs
-docker-compose logs -f aether-panel
+docker-compose logs -f aether-dashboard
 
 # Stop all services
 docker-compose down
@@ -162,7 +162,7 @@ docker-compose down
 docker-compose up -d --build
 
 # Access container shell
-docker-compose exec aether-panel sh
+docker-compose exec aether-dashboard sh
 
 # Restart services
 docker-compose restart
@@ -174,15 +174,15 @@ If you prefer to build manually without docker-compose:
 
 ```bash
 # Build the image
-docker build -t aether-panel:latest .
+docker build -t aether-dashboard:latest .
 
 # Run with external PostgreSQL and Redis
 docker run -d \
-  --name aether-panel \
+  --name aether-dashboard \
   -p 5000:5000 \
   --env-file .env \
   --network your-network \
-  aether-panel:latest
+  aether-dashboard:latest
 ```
 
 **Note**: When running manually, ensure PostgreSQL and Redis are accessible and configured in your `.env` file.

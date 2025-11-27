@@ -1,5 +1,5 @@
 {
-  "name": "aether-panel-backend",
+  "name": "aether-dashboard-backend",
   "version": "1.0.0",
   "description": "Game Server Hosting Dashboard Backend API",
   "main": "src/server.js",

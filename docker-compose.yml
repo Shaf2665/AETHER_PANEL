@@ -1,11 +1,11 @@
 version: '3.8'
 
 services:
-  aether-panel:
+  aether-dashboard:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: aether-panel
+    container_name: aether-dashboard
     restart: unless-stopped
     ports:
       - "${PANEL_PORT:-5000}:5000"
@@ -14,7 +14,7 @@ services:
       - PORT=5000
       - DB_HOST=postgres
       - DB_PORT=5432
-      - DB_NAME=${DB_NAME:-aether_panel}
+      - DB_NAME=${DB_NAME:-aether_dashboard}
       - DB_USER=${DB_USER:-postgres}
       - DB_PASSWORD=${DB_PASSWORD}
       - REDIS_HOST=redis
@@ -64,7 +64,7 @@ services:
     container_name: aether-postgres
     restart: unless-stopped
     environment:
-      - POSTGRES_DB=${DB_NAME:-aether_panel}
+      - POSTGRES_DB=${DB_NAME:-aether_dashboard}
       - POSTGRES_USER=${DB_USER:-postgres}
       - POSTGRES_PASSWORD=${DB_PASSWORD}
     volumes:

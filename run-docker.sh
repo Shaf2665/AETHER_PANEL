@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Run script for Aether Panel Docker container
+# Run script for Aether Dashboard Docker container
 
 set -e
 
@@ -10,7 +10,7 @@ if [ ! -f .env ]; then
     exit 1
 fi
 
-echo "Starting Aether Panel with Docker Compose..."
+echo "Starting Aether Dashboard with Docker Compose..."
 
 # Start services
 docker-compose up -d
@@ -26,9 +26,9 @@ echo "Checking service health..."
 docker-compose ps
 
 echo ""
-echo "Aether Panel should be available at: http://localhost:5000"
+echo "Aether Dashboard should be available at: http://localhost:5000"
 echo "Health check: http://localhost:5000/health"
 echo ""
-echo "To view logs: docker-compose logs -f aether-panel"
+echo "To view logs: docker-compose logs -f aether-dashboard"
 echo "To stop: docker-compose down"
 
