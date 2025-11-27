@@ -67,7 +67,30 @@ Aether Panel is designed to run in Docker containers. This is the recommended an
 - Docker Compose (version 2.0 or higher)
 - Pterodactyl Panel (with API keys)
 
-### Quick Start with Docker
+### 🚀 Quick Start (Recommended)
+
+The easiest way to install Aether Panel is using our interactive setup wizard:
+
+```bash
+git clone https://github.com/Shaf2665/AETHER_PANEL.git
+cd AETHER_PANEL
+./setup.sh
+```
+
+The setup wizard will:
+- ✅ Check all prerequisites
+- ✅ Guide you through configuration step-by-step
+- ✅ Auto-generate secure JWT secret
+- ✅ Create `.env` file automatically
+- ✅ Build and start all services
+- ✅ Run database migrations
+- ✅ Verify installation
+
+**That's it!** Just answer a few questions and you're ready to go.
+
+### Manual Installation (Alternative)
+
+If you prefer to configure manually:
 
 1. **Clone the repository:**
 ```bash
