@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   aether-dashboard:
     build:
@@ -93,13 +91,30 @@ services:
     image: redis:7-alpine
     container_name: aether-redis
     restart: unless-stopped
-    command: redis-server --requirepass ${REDIS_PASSWORD:-} --appendonly yes
+    pull_policy: if_not_present
+    command: >
+      sh -c "
+      if [ -n \"$$REDIS_PASSWORD\" ]; then
+        redis-server --requirepass \"$$REDIS_PASSWORD\" --appendonly yes
+      else
+        redis-server --appendonly yes
+      fi
+      "
+    environment:
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-}
     volumes:
       - redis_data:/data
     networks:
       - aether-network
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: >
+        sh -c "
+        if [ -n \"$$REDIS_PASSWORD\" ]; then
+          redis-cli -a \"$$REDIS_PASSWORD\" ping || exit 1
+        else
+          redis-cli ping || exit 1
+        fi
+        "
       interval: 10s
       timeout: 5s
       retries: 5
