@@ -4,12 +4,19 @@
 CREATE TABLE IF NOT EXISTS users (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     username VARCHAR(20) UNIQUE NOT NULL,
-    email VARCHAR(255) UNIQUE NOT NULL,
-    password_hash VARCHAR(255) NOT NULL,
+    email VARCHAR(255) UNIQUE,
+    password_hash VARCHAR(255),
+    discord_id VARCHAR(255) UNIQUE,
+    discord_username VARCHAR(255),
+    discord_avatar VARCHAR(500),
     coins DECIMAL(10, 2) DEFAULT 0.00,
     total_earned_coins DECIMAL(10, 2) DEFAULT 0.00,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    last_active TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    last_active TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT users_auth_check CHECK (
+        (email IS NOT NULL AND password_hash IS NOT NULL) OR 
+        discord_id IS NOT NULL
+    )
 );
 
 -- Servers table
@@ -65,6 +72,7 @@ CREATE TABLE IF NOT EXISTS resource_purchases (
 -- Indexes for better performance
 CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
 CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);
+CREATE INDEX IF NOT EXISTS idx_users_discord_id ON users(discord_id);
 CREATE INDEX IF NOT EXISTS idx_servers_user_id ON servers(user_id);
 CREATE INDEX IF NOT EXISTS idx_transactions_user_id ON transactions(user_id);
 CREATE INDEX IF NOT EXISTS idx_transactions_created_at ON transactions(created_at);

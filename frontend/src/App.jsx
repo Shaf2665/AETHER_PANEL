@@ -10,6 +10,7 @@ import EarnCoins from './pages/EarnCoins';
 import Store from './pages/Store';
 import Login from './pages/Login';
 import Register from './pages/Register';
+import AuthCallback from './pages/AuthCallback';
 
 // Components
 import Navbar from './components/Layout/Navbar';
@@ -51,6 +52,7 @@ function App() {
           <Routes>
             <Route path="/login" element={<Login />} />
             <Route path="/register" element={<Register />} />
+            <Route path="/auth/callback" element={<AuthCallback />} />
             <Route
               path="/*"
               element={

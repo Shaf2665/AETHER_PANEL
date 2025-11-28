@@ -132,6 +132,12 @@ PTERODACTYL_NEST_ID=1
 PTERODACTYL_EGG_ID=1
 PTERODACTYL_DEFAULT_USER_ID=1
 
+# Discord OAuth Configuration (Optional)
+DISCORD_ENABLED=false
+DISCORD_CLIENT_ID=your-discord-client-id
+DISCORD_CLIENT_SECRET=your-discord-client-secret
+DISCORD_REDIRECT_URI=https://your-dashboard-domain.com/api/auth/discord/callback
+
 # Revenue System Configuration
 LINKVERTISE_ENABLED=true
 AFK_ENABLED=true
@@ -224,6 +230,12 @@ All configuration is done through environment variables in the `.env` file. See 
    - Configure node/nest/egg IDs for server creation
 
 4. **Database**: Configure PostgreSQL connection in `.env`
+
+5. **Discord OAuth** (Optional): 
+   - Create a Discord Application at https://discord.com/developers/applications
+   - Get Client ID and Client Secret
+   - Set Redirect URI to: `https://your-domain.com/api/auth/discord/callback`
+   - Add to `.env`: `DISCORD_ENABLED=true`, `DISCORD_CLIENT_ID`, `DISCORD_CLIENT_SECRET`
 
 ### Optional Configuration
 
