@@ -8,7 +8,7 @@ import {
   XMarkIcon,
   CpuChipIcon,
   CircleStackIcon,
-  HardDriveIcon,
+  CubeIcon,
   CheckCircleIcon,
   TrashIcon,
   Cog6ToothIcon
@@ -317,7 +317,7 @@ const Servers = () => {
                 </div>
                 <div className="flex items-center justify-between p-2 bg-emerald-50 rounded-lg">
                   <div className="flex items-center space-x-2">
-                    <HardDriveIcon className="h-4 w-4 text-emerald-600" />
+                    <CubeIcon className="h-4 w-4 text-emerald-600" />
                     <span className="text-sm text-gray-600">Disk</span>
                   </div>
                   <span className="font-semibold text-gray-900">{(server.disk_limit / 1024).toFixed(1)} GB</span>
