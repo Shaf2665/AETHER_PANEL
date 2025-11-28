@@ -5,42 +5,62 @@ import {
   ServerIcon,
   CurrencyDollarIcon,
   ShoppingBagIcon,
+  SparklesIcon,
 } from '@heroicons/react/24/outline';
 
 const Sidebar = () => {
   const location = useLocation();
 
   const navigation = [
-    { name: 'Dashboard', href: '/', icon: HomeIcon },
-    { name: 'Servers', href: '/servers', icon: ServerIcon },
-    { name: 'Earn Coins', href: '/earn', icon: CurrencyDollarIcon },
-    { name: 'Store', href: '/store', icon: ShoppingBagIcon },
+    { name: 'Dashboard', href: '/', icon: HomeIcon, gradient: 'from-blue-500 to-cyan-500' },
+    { name: 'Servers', href: '/servers', icon: ServerIcon, gradient: 'from-purple-500 to-pink-500' },
+    { name: 'Earn Coins', href: '/earn', icon: CurrencyDollarIcon, gradient: 'from-emerald-500 to-teal-500' },
+    { name: 'Store', href: '/store', icon: ShoppingBagIcon, gradient: 'from-amber-500 to-orange-500' },
   ];
 
   return (
-    <div className="w-64 bg-gray-900 min-h-screen">
-      <div className="p-6">
-        <h2 className="text-white text-xl font-bold">Aether Dashboard</h2>
+    <div className="w-64 bg-gradient-to-b from-gray-900 via-gray-800 to-gray-900 min-h-screen shadow-2xl border-r border-gray-700/50">
+      <div className="p-6 border-b border-gray-700/50">
+        <div className="flex items-center space-x-3">
+          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 via-purple-500 to-pink-500 flex items-center justify-center shadow-lg">
+            <SparklesIcon className="h-6 w-6 text-white" />
+          </div>
+          <div>
+            <h2 className="text-white text-xl font-bold bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">
+              Aether
+            </h2>
+            <p className="text-xs text-gray-400">Dashboard</p>
+          </div>
+        </div>
       </div>
-      <nav className="px-3">
+      <nav className="p-3 mt-4">
         {navigation.map((item) => {
           const isActive = location.pathname === item.href;
           return (
             <Link
               key={item.name}
               to={item.href}
-              className={`flex items-center px-3 py-2 text-sm font-medium rounded-md mb-1 ${
+              className={`group relative flex items-center px-4 py-3 text-sm font-medium rounded-xl mb-2 transition-all duration-200 ${
                 isActive
-                  ? 'bg-gray-800 text-white'
-                  : 'text-gray-300 hover:bg-gray-800 hover:text-white'
+                  ? `bg-gradient-to-r ${item.gradient} text-white shadow-lg transform scale-105`
+                  : 'text-gray-300 hover:text-white hover:bg-gray-800/50'
               }`}
             >
-              <item.icon className="mr-3 h-5 w-5" />
-              {item.name}
+              {isActive && (
+                <div className={`absolute left-0 top-0 bottom-0 w-1 bg-white rounded-r-full`}></div>
+              )}
+              <item.icon className={`mr-3 h-5 w-5 ${isActive ? 'text-white' : 'text-gray-400 group-hover:text-white'} transition-colors`} />
+              <span className="relative z-10">{item.name}</span>
+              {isActive && (
+                <div className="absolute inset-0 bg-white/10 rounded-xl blur-sm"></div>
+              )}
             </Link>
           );
         })}
       </nav>
+      
+      {/* Decorative gradient at bottom */}
+      <div className="absolute bottom-0 left-0 right-0 h-32 bg-gradient-to-t from-purple-900/20 to-transparent pointer-events-none"></div>
     </div>
   );
 };
