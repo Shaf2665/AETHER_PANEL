@@ -12,6 +12,7 @@ import {
 const EarnCoins = () => {
   const queryClient = useQueryClient();
   const [afkMinutes, setAfkMinutes] = useState(0);
+  const [activeLinkvertiseLink, setActiveLinkvertiseLink] = useState(null);
 
   const { data: balance } = useQuery('balance', async () => {
     const res = await api.get('/coins/balance');
@@ -33,7 +34,32 @@ const EarnCoins = () => {
     {
       onSuccess: (data) => {
         toast.success('Link generated! Complete it to earn coins.');
+        setActiveLinkvertiseLink(data);
         window.open(data.linkvertiseUrl, '_blank');
+      },
+      onError: (error) => {
+        const message = error.response?.data?.error || 'Failed to generate link';
+        toast.error(message);
+      },
+    }
+  );
+
+  const linkvertiseCompleteMutation = useMutation(
+    async (linkId) => {
+      const res = await api.post('/revenue/linkvertise/complete', {
+        linkId: linkId,
+      });
+      return res.data;
+    },
+    {
+      onSuccess: (data) => {
+        toast.success(`Successfully earned ${data.coins} coins!`);
+        queryClient.invalidateQueries('balance');
+        setActiveLinkvertiseLink(null);
+      },
+      onError: (error) => {
+        const message = error.response?.data?.error || 'Failed to complete link';
+        toast.error(message);
       },
     }
   );
@@ -70,8 +96,15 @@ const EarnCoins = () => {
       description: 'Complete short links to earn coins',
       icon: LinkIcon,
       coins: 50,
-      action: () => linkvertiseMutation.mutate(),
+      action: () => {
+        if (activeLinkvertiseLink) {
+          linkvertiseCompleteMutation.mutate(activeLinkvertiseLink.linkId);
+        } else {
+          linkvertiseMutation.mutate();
+        }
+      },
       color: 'bg-blue-500',
+      hasActiveLink: !!activeLinkvertiseLink,
     },
     {
       name: 'AFK Page',
@@ -127,15 +160,29 @@ const EarnCoins = () => {
                 Active session: {afkStatus?.minutes || 0} minutes
               </div>
             )}
+            {method.hasActiveLink && (
+              <div className="mb-4 p-2 bg-blue-50 rounded text-sm text-blue-700">
+                Link generated! Complete the link, then click below to claim your coins.
+              </div>
+            )}
             <button
               onClick={method.action}
+              disabled={method.hasActiveLink && linkvertiseCompleteMutation.isLoading}
               className={`w-full px-4 py-2 rounded-lg font-medium transition-colors ${
                 method.active
                   ? 'bg-green-500 text-white hover:bg-green-600'
+                  : method.hasActiveLink
+                  ? 'bg-green-500 text-white hover:bg-green-600'
                   : 'bg-blue-500 text-white hover:bg-blue-600'
-              }`}
+              } disabled:opacity-50 disabled:cursor-not-allowed`}
             >
-              {method.active ? 'Complete Session' : `Start ${method.name}`}
+              {method.hasActiveLink
+                ? linkvertiseCompleteMutation.isLoading
+                  ? 'Processing...'
+                  : 'Mark as Complete'
+                : method.active
+                ? 'Complete Session'
+                : `Start ${method.name}`}
             </button>
           </div>
         ))}

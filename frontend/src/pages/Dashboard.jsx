@@ -1,4 +1,5 @@
 import React from 'react';
+import { Link } from 'react-router-dom';
 import { useQuery } from 'react-query';
 import { useAuth } from '../contexts/AuthContext';
 import api from '../services/api';
@@ -75,27 +76,27 @@ const Dashboard = () => {
       <div className="bg-white rounded-lg shadow p-6">
         <h2 className="text-xl font-semibold text-gray-900 mb-4">Quick Actions</h2>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <a
-            href="/servers"
+          <Link
+            to="/servers"
             className="p-4 border-2 border-gray-200 rounded-lg hover:border-blue-500 transition-colors"
           >
             <h3 className="font-semibold text-gray-900">Manage Servers</h3>
             <p className="text-sm text-gray-600 mt-1">View and manage your game servers</p>
-          </a>
-          <a
-            href="/earn"
+          </Link>
+          <Link
+            to="/earn"
             className="p-4 border-2 border-gray-200 rounded-lg hover:border-green-500 transition-colors"
           >
             <h3 className="font-semibold text-gray-900">Earn Coins</h3>
             <p className="text-sm text-gray-600 mt-1">Complete tasks to earn coins</p>
-          </a>
-          <a
-            href="/store"
+          </Link>
+          <Link
+            to="/store"
             className="p-4 border-2 border-gray-200 rounded-lg hover:border-purple-500 transition-colors"
           >
             <h3 className="font-semibold text-gray-900">Store</h3>
             <p className="text-sm text-gray-600 mt-1">Purchase resources and upgrades</p>
-          </a>
+          </Link>
         </div>
       </div>
     </div>

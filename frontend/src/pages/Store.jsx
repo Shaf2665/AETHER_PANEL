@@ -1,4 +1,5 @@
 import React from 'react';
+import { Link } from 'react-router-dom';
 import { useQuery } from 'react-query';
 import api from '../services/api';
 import { 
@@ -55,12 +56,12 @@ const Store = () => {
             <p className="text-sm text-gray-600">Available Coins</p>
             <p className="text-3xl font-bold text-gray-900">{balance?.coins || 0}</p>
           </div>
-          <a
-            href="/earn"
+          <Link
+            to="/earn"
             className="px-6 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600"
           >
             Earn More Coins
-          </a>
+          </Link>
         </div>
       </div>
 

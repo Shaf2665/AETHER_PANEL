@@ -9,6 +9,10 @@ const path = require('path');
 // Load environment variables
 dotenv.config();
 
+// Validate environment variables
+const { validateEnv } = require('./config/env');
+validateEnv();
+
 // Import routes
 const authRoutes = require('./routes/auth.routes');
 const coinRoutes = require('./routes/coin.routes');
@@ -34,18 +38,22 @@ const corsOptions = {
 
 if (isProduction) {
   const frontendUrl = process.env.FRONTEND_URL;
-  if (frontendUrl) {
-    // Support multiple origins (comma-separated)
-    corsOptions.origin = frontendUrl.includes(',') 
-      ? frontendUrl.split(',').map(url => url.trim())
-      : frontendUrl;
-  } else {
-    // Default to a secure origin if not set
-    corsOptions.origin = 'https://yourdomain.com';
-    console.warn('⚠️  FRONTEND_URL not set in production. Using default origin.');
+  if (!frontendUrl || frontendUrl.trim() === '') {
+    console.error('❌ ERROR: FRONTEND_URL environment variable is required in production!');
+    console.error('   Please set FRONTEND_URL to your frontend URL (e.g., https://dashboard.example.com)');
+    console.error('   Multiple origins can be comma-separated (e.g., https://app1.com,https://app2.com)');
+    process.exit(1);
   }
+  
+  // Support multiple origins (comma-separated)
+  corsOptions.origin = frontendUrl.includes(',') 
+    ? frontendUrl.split(',').map(url => url.trim())
+    : frontendUrl.trim();
+    
+  console.log(`✅ CORS configured for production: ${Array.isArray(corsOptions.origin) ? corsOptions.origin.join(', ') : corsOptions.origin}`);
 } else {
   corsOptions.origin = 'http://localhost:3000';
+  console.log('✅ CORS configured for development: http://localhost:3000');
 }
 
 app.use(cors(corsOptions));

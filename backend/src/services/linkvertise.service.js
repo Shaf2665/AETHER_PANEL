@@ -31,32 +31,56 @@ class LinkvertiseService {
       return false;
     }
 
+    // Check if manual verification mode is enabled
+    const manualMode = process.env.LINKVERTISE_MANUAL_MODE === 'true';
+    
+    if (manualMode) {
+      // Manual verification mode: verify that the link exists and is valid
+      // The actual completion is trusted (user clicks "Mark as Complete")
+      // This mode allows the feature to work while API integration is being set up
+      const RevenueTask = require('../models/RevenueTask');
+      const task = await RevenueTask.findByTaskId(linkId);
+      
+      if (!task) {
+        return false;
+      }
+      
+      // Check if task is still valid (not expired, not already completed)
+      if (task.status !== 'pending') {
+        return false;
+      }
+      
+      // Check if task hasn't expired
+      if (task.expires_at && new Date(task.expires_at) < new Date()) {
+        return false;
+      }
+      
+      // Manual mode: trust user completion
+      return true;
+    }
+
+    // API verification mode (when API key is configured)
     if (!this.apiKey || this.apiKey === '') {
-      console.warn('⚠️  Linkvertise API key not configured. Verification disabled.');
+      console.warn('⚠️  Linkvertise API key not configured. Use LINKVERTISE_MANUAL_MODE=true for manual verification.');
       return false;
     }
 
-    // Verify with Linkvertise API that the link was completed
-    // This would typically involve a webhook or API call
     // TODO: Implement actual Linkvertise API verification
-    // For now, we require API key to be set and return false to prevent exploitation
+    // This would call Linkvertise's verification API or webhook
+    // Example implementation:
+    // try {
+    //   const response = await axios.get(`https://api.linkvertise.com/v1/verify/${linkId}`, {
+    //     headers: { 'Authorization': `Bearer ${this.apiKey}` }
+    //   });
+    //   return response.data.completed === true;
+    // } catch (error) {
+    //   console.error('Linkvertise API verification error:', error);
+    //   return false;
+    // }
     
-    try {
-      // In production, this would call Linkvertise's verification API
-      // Example implementation:
-      // const response = await axios.get(`https://api.linkvertise.com/v1/verify/${linkId}`, {
-      //   headers: { 'Authorization': `Bearer ${this.apiKey}` }
-      // });
-      // return response.data.completed === true;
-      
-      // SECURITY: Return false until proper API integration is implemented
-      // This prevents users from exploiting the placeholder verification
-      console.warn('⚠️  Linkvertise verification not fully implemented. Returning false for security.');
-      return false;
-    } catch (error) {
-      console.error('Linkvertise verification error:', error);
-      return false;
-    }
+    // For now, if not in manual mode and API not implemented, return false
+    console.warn('⚠️  Linkvertise API verification not implemented. Set LINKVERTISE_MANUAL_MODE=true for manual verification.');
+    return false;
   }
 
   getCoinsReward() {
