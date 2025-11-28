@@ -97,7 +97,7 @@ app.use('/api/resources', resourceRoutes);
 
 // Serve static files from React app in production
 if (isProduction) {
-  const frontendBuildPath = path.join(__dirname, '../../frontend/build');
+  const frontendBuildPath = path.join(__dirname, '../frontend/build');
   app.use(express.static(frontendBuildPath));
   
   // Serve React app for all non-API routes (React Router)

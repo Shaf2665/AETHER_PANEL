@@ -105,6 +105,9 @@ cat > .env << 'EOF'
 NODE_ENV=production
 PORT=5000
 
+# Frontend URL (REQUIRED in production - your dashboard domain)
+FRONTEND_URL=https://your-dashboard-domain.com
+
 # JWT Secret (REQUIRED - Generate a strong random secret)
 JWT_SECRET=your-super-secret-jwt-key-minimum-32-characters
 
@@ -115,6 +118,8 @@ DB_PASSWORD=your-secure-database-password
 
 # Redis Configuration
 REDIS_ENABLED=true
+REDIS_HOST=redis
+REDIS_PORT=6379
 REDIS_PASSWORD=your-redis-password
 
 # Pterodactyl Panel Configuration
@@ -122,6 +127,10 @@ PTERODACTYL_URL=https://your-panel-url.com
 PTERODACTYL_API_KEY=your-pterodactyl-api-key
 PTERODACTYL_CLIENT_API_KEY=your-pterodactyl-client-api-key
 PTERODACTYL_APPLICATION_API_KEY=your-pterodactyl-application-api-key
+PTERODACTYL_NODE_ID=1
+PTERODACTYL_NEST_ID=1
+PTERODACTYL_EGG_ID=1
+PTERODACTYL_DEFAULT_USER_ID=1
 
 # Revenue System Configuration
 LINKVERTISE_ENABLED=true
@@ -195,17 +204,26 @@ All configuration is done through environment variables in the `.env` file. See 
 
 ### Required Configuration
 
-1. **JWT Secret**: Generate a strong random secret (minimum 32 characters)
+1. **Frontend URL** (Production only): Set your dashboard domain
+   ```bash
+   FRONTEND_URL=https://your-dashboard-domain.com
+   ```
+   - Required in production for CORS configuration
+   - Can be omitted in development
+   - Supports multiple origins (comma-separated)
+
+2. **JWT Secret**: Generate a strong random secret (minimum 32 characters)
    ```bash
    # Generate a secure secret
    openssl rand -base64 32
    ```
 
-2. **Pterodactyl Panel**: 
+3. **Pterodactyl Panel**: 
    - Generate API keys in your Pterodactyl Panel
    - Add them to your `.env` file
+   - Configure node/nest/egg IDs for server creation
 
-3. **Database**: Configure PostgreSQL connection in `.env`
+4. **Database**: Configure PostgreSQL connection in `.env`
 
 ### Optional Configuration
 

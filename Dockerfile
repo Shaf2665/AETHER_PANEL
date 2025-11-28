@@ -8,7 +8,7 @@ WORKDIR /app/frontend
 COPY frontend/package*.json ./
 
 # Install frontend dependencies
-RUN npm ci --only=production=false
+RUN npm install
 
 # Copy frontend source code
 COPY frontend/ ./
@@ -28,7 +28,7 @@ RUN apk add --no-cache dumb-init
 COPY backend/package*.json ./
 
 # Install backend dependencies (production only)
-RUN npm ci --only=production
+RUN npm install --production
 
 # Copy backend source code
 COPY backend/ ./
