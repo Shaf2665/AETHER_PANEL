@@ -661,75 +661,6 @@ show_menu() {
     return 1
 }
 
-# Main execution function
-execute() {
-    local action=$1
-    
-    case $action in
-        "full")
-            # Run all steps
-            check_prerequisites
-            create_configuration
-            if [ "$SKIP_ENV_CREATION" != "true" ]; then
-                if ! validate_configuration; then
-                    print_error "Configuration validation failed. Please fix the errors and try again."
-                    exit 1
-                fi
-            fi
-            create_backup
-            if ! preflight_checks; then
-                print_error "Pre-flight checks failed. Please fix the issues and try again."
-                exit 1
-            fi
-            execute_build_and_start
-            run_migrations
-            verify_installation
-            show_final_summary
-            ;;
-        "config")
-            check_prerequisites
-            create_configuration
-            if [ "$SKIP_ENV_CREATION" != "true" ]; then
-                validate_configuration
-            fi
-            create_backup
-            print_success "Configuration completed!"
-            echo ""
-            echo "Next steps:"
-            echo "  1. Review the .env file"
-            echo "  2. Run the script again and select 'Build and Start Services'"
-            ;;
-        "build")
-            check_prerequisites
-            if [ ! -f .env ]; then
-                print_error ".env file not found. Please run 'Configuration Only' first."
-                exit 1
-            fi
-            execute_build_and_start
-            ;;
-        "migrate")
-            check_prerequisites
-            if [ ! -f .env ]; then
-                print_error ".env file not found. Please run configuration first."
-                exit 1
-            fi
-            run_migrations
-            ;;
-        "verify")
-            check_prerequisites
-            verify_installation
-            ;;
-        "exit")
-            print_info "Exiting installer"
-            exit 0
-            ;;
-        *)
-            print_error "Unknown action: $action"
-            exit 1
-            ;;
-    esac
-}
-
 # Function to check prerequisites (extracted from main flow)
 check_prerequisites() {
     echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
@@ -737,82 +668,85 @@ check_prerequisites() {
     echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
     echo ""
 
-# Check Docker
-if command_exists docker; then
-    DOCKER_VERSION=$(docker --version | awk '{print $3}' | sed 's/,//')
-    print_success "Docker is installed (version: $DOCKER_VERSION)"
-else
-    print_error "Docker is not installed"
-    echo ""
-    read -p "Do you want to install Docker automatically? (Y/n): " install_docker_choice
-    if [[ ! $install_docker_choice =~ ^[Nn]$ ]]; then
-        if install_docker; then
-            print_success "Docker installation completed"
+    # Check Docker
+    if command_exists docker; then
+        DOCKER_VERSION=$(docker --version | awk '{print $3}' | sed 's/,//')
+        print_success "Docker is installed (version: $DOCKER_VERSION)"
+    else
+        print_error "Docker is not installed"
+        echo ""
+        read -p "Do you want to install Docker automatically? (Y/n): " install_docker_choice
+        if [[ ! $install_docker_choice =~ ^[Nn]$ ]]; then
+            if install_docker; then
+                print_success "Docker installation completed"
+            else
+                print_error "Docker installation failed. Please install manually:"
+                echo "  - Linux: https://docs.docker.com/engine/install/"
+                exit 1
+            fi
         else
-            print_error "Docker installation failed. Please install manually:"
+            echo "Please install Docker first:"
             echo "  - Linux: https://docs.docker.com/engine/install/"
             exit 1
         fi
-    else
-        echo "Please install Docker first:"
-        echo "  - Linux: https://docs.docker.com/engine/install/"
-        exit 1
     fi
-fi
 
-# Check Docker Compose
-if command_exists docker-compose || docker compose version >/dev/null 2>&1; then
-    if docker compose version >/dev/null 2>&1; then
-        COMPOSE_VERSION=$(docker compose version | awk '{print $4}')
-        print_success "Docker Compose is installed (version: $COMPOSE_VERSION)"
-        DOCKER_COMPOSE_CMD="docker compose"
-    else
-        COMPOSE_VERSION=$(docker-compose --version | awk '{print $3}' | sed 's/,//')
-        print_success "Docker Compose is installed (version: $COMPOSE_VERSION)"
-        DOCKER_COMPOSE_CMD="docker-compose"
-    fi
-else
-    print_error "Docker Compose is not installed"
-    echo ""
-    read -p "Do you want to install Docker Compose automatically? (Y/n): " install_compose_choice
-    if [[ ! $install_compose_choice =~ ^[Nn]$ ]]; then
-        if install_docker_compose; then
-            print_success "Docker Compose installation completed"
+    # Check Docker Compose
+    if command_exists docker-compose || docker compose version >/dev/null 2>&1; then
+        if docker compose version >/dev/null 2>&1; then
+            COMPOSE_VERSION=$(docker compose version | awk '{print $4}')
+            print_success "Docker Compose is installed (version: $COMPOSE_VERSION)"
+            DOCKER_COMPOSE_CMD="docker compose"
         else
-            print_error "Docker Compose installation failed. Please install manually:"
+            COMPOSE_VERSION=$(docker-compose --version | awk '{print $3}' | sed 's/,//')
+            print_success "Docker Compose is installed (version: $COMPOSE_VERSION)"
+            DOCKER_COMPOSE_CMD="docker-compose"
+        fi
+    else
+        print_error "Docker Compose is not installed"
+        echo ""
+        read -p "Do you want to install Docker Compose automatically? (Y/n): " install_compose_choice
+        if [[ ! $install_compose_choice =~ ^[Nn]$ ]]; then
+            if install_docker_compose; then
+                print_success "Docker Compose installation completed"
+            else
+                print_error "Docker Compose installation failed. Please install manually:"
+                echo "  https://docs.docker.com/compose/install/"
+                exit 1
+            fi
+        else
+            echo "Please install Docker Compose first:"
             echo "  https://docs.docker.com/compose/install/"
             exit 1
         fi
-    else
-        echo "Please install Docker Compose first:"
-        echo "  https://docs.docker.com/compose/install/"
-        exit 1
     fi
-fi
 
-# Check if Docker is running
-if docker info >/dev/null 2>&1; then
-    print_success "Docker daemon is running"
-else
-    print_error "Docker daemon is not running"
-    echo ""
-    read -p "Do you want to start Docker daemon automatically? (Y/n): " start_docker_choice
-    if [[ ! $start_docker_choice =~ ^[Nn]$ ]]; then
-        if start_docker_daemon; then
-            print_success "Docker daemon started"
+    # Check if Docker is running
+    if docker info >/dev/null 2>&1; then
+        print_success "Docker daemon is running"
+    else
+        print_error "Docker daemon is not running"
+        echo ""
+        read -p "Do you want to start Docker daemon automatically? (Y/n): " start_docker_choice
+        if [[ ! $start_docker_choice =~ ^[Nn]$ ]]; then
+            if start_docker_daemon; then
+                print_success "Docker daemon started"
+            else
+                print_error "Failed to start Docker daemon. Please start manually and try again."
+                exit 1
+            fi
         else
-            print_error "Failed to start Docker daemon. Please start manually and try again."
+            echo "Please start Docker and try again."
             exit 1
         fi
-    else
-        echo "Please start Docker and try again."
-        exit 1
     fi
-fi
 
-echo ""
+    echo ""
+}
 
-# Step 2: Check if .env already exists
+# Function to create configuration
+create_configuration() {
+    # Step 2: Check if .env already exists
 if [ -f .env ]; then
     echo -e "${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
     print_warning "A .env file already exists!"
@@ -1008,6 +942,20 @@ if [ "$SKIP_ENV_CREATION" != "true" ]; then
     fi
     echo ""
 
+    # Admin Email Configuration
+    echo -e "${YELLOW}Admin Configuration${NC}"
+    echo "────────────────────────────────────────────────────────────────────────────"
+    print_info "Enter the email address that should be assigned admin role automatically"
+    echo ""
+    read -p "Admin Email (optional, press Enter to skip): " ADMIN_EMAIL
+    ADMIN_EMAIL=${ADMIN_EMAIL:-}
+    if [ -n "$ADMIN_EMAIL" ]; then
+        print_success "Admin email set to: $ADMIN_EMAIL"
+    else
+        print_info "No admin email configured. You can set it later in the .env file."
+    fi
+    echo ""
+
     # Database Configuration
     echo -e "${YELLOW}Database Configuration${NC}"
     echo "────────────────────────────────────────────────────────────────────────────"
@@ -1176,8 +1124,76 @@ DAILY_LOGIN_ENABLED=$DAILY_LOGIN_ENABLED
 DAILY_LOGIN_COINS=25
 EOF
 
-        print_success ".env file created successfully"
-        echo ""
+    print_success ".env file created successfully"
+    echo ""
+}
+
+# Function to execute build and start services
+execute_build_and_start() {
+    echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo -e "${BLUE}Building and Starting Services${NC}"
+    echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo ""
+    
+    print_info "Building Docker images..."
+    if $DOCKER_COMPOSE_CMD build; then
+        print_success "Docker images built successfully"
+    else
+        print_error "Failed to build Docker images"
+        exit 1
+    fi
+    
+    echo ""
+    print_info "Starting services..."
+    if $DOCKER_COMPOSE_CMD up -d; then
+        print_success "Services started successfully"
+    else
+        print_error "Failed to start services"
+        exit 1
+    fi
+    
+    echo ""
+    print_info "Waiting for services to be ready..."
+    sleep 5
+}
+
+# Function to run database migrations
+run_migrations() {
+    echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo -e "${BLUE}Running Database Migrations${NC}"
+    echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo ""
+    
+    print_info "Waiting for database to be ready..."
+    
+    # Wait for database with retries
+    local db_ready=false
+    for i in {1..30}; do
+        if $DOCKER_COMPOSE_CMD exec -T aether-postgres pg_isready -U postgres >/dev/null 2>&1; then
+            db_ready=true
+            break
+        fi
+        printf "\rWaiting for database... (attempt $i/30) "
+        sleep 2
+    done
+    printf "\r"
+    
+    if [ "$db_ready" = false ]; then
+        print_error "Database is not ready after 60 seconds"
+        return 1
+    fi
+    
+    print_success "Database is ready"
+    sleep 2
+    
+    print_info "Running database migrations..."
+    
+    if retry_command 3 5 $DOCKER_COMPOSE_CMD exec -T aether-dashboard npm run migrate; then
+        print_success "Database migrations completed"
+        return 0
+    else
+        print_warning "Migration command returned an error, but this might be normal if migrations already ran"
+        return 0  # Don't fail if migrations already ran
     fi
 }
 
@@ -1253,42 +1269,6 @@ execute() {
 # Function to show final summary
 show_final_summary() {
     show_installation_summary
-    echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-    echo -e "${BLUE}Setting Up Database${NC}"
-    echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-    echo ""
-    
-    print_info "Waiting for database to be ready..."
-    
-    # Wait for database with retries
-    local db_ready=false
-    for i in {1..30}; do
-        if $DOCKER_COMPOSE_CMD exec -T aether-postgres pg_isready -U postgres >/dev/null 2>&1; then
-            db_ready=true
-            break
-        fi
-        printf "\rWaiting for database... (attempt $i/30) "
-        sleep 2
-    done
-    printf "\r"
-    
-    if [ "$db_ready" = false ]; then
-        print_error "Database is not ready after 60 seconds"
-        return 1
-    fi
-    
-    print_success "Database is ready"
-    sleep 2
-    
-    print_info "Running database migrations..."
-    
-    if retry_command 3 5 $DOCKER_COMPOSE_CMD exec -T aether-dashboard npm run migrate; then
-        print_success "Database migrations completed"
-        return 0
-    else
-        print_warning "Migration command returned an error, but this might be normal if migrations already ran"
-        return 0  # Don't fail if migrations already ran
-    fi
 }
 
 # Function to verify installation
