@@ -75,9 +75,48 @@ Aether Dashboard is designed to run in Docker containers. This is the recommende
 
 ### Prerequisites
 
+- **Git** - Required to clone the repository
 - Docker (version 20.10 or higher)
 - Docker Compose (version 2.0 or higher)
 - Pterodactyl Panel (with API keys)
+
+#### Installing Git
+
+If Git is not installed on your system, install it using one of the following methods:
+
+**Ubuntu/Debian:**
+```bash
+sudo apt update
+sudo apt install git -y
+```
+
+**CentOS/RHEL/Fedora:**
+```bash
+sudo yum install git -y
+# or for newer versions
+sudo dnf install git -y
+```
+
+**Arch Linux:**
+```bash
+sudo pacman -S git
+```
+
+**macOS:**
+```bash
+# Using Homebrew
+brew install git
+
+# Or download from: https://git-scm.com/download/mac
+```
+
+**Windows:**
+Download and install from: https://git-scm.com/download/win
+
+After installation, verify Git is installed:
+```bash
+git --version
+```
 
 ### 🚀 Quick Start (Recommended)
 
@@ -92,7 +131,8 @@ chmod +x setup.sh
 
 The setup wizard will:
 - ✅ Check all prerequisites (Docker, Docker Compose)
-- ✅ Automatically install missing prerequisites if needed
+- ✅ Automatically install missing prerequisites if needed (Docker and Docker Compose)
+- ⚠️ **Note**: Git must be installed manually before running the setup script (see Prerequisites above)
 - ✅ Auto-detect your VPS IP address
 - ✅ Guide you through configuration step-by-step
 - ✅ Support subdomain setup with Cloudflare DNS instructions
