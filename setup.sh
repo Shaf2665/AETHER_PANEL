@@ -186,14 +186,12 @@ create_backup() {
     if [ -f .env ]; then
         BACKUP_FILE=".env.backup.$(date +%Y%m%d_%H%M%S)"
         cp .env "$BACKUP_FILE" 2>/dev/null && print_success "Configuration backed up to $BACKUP_FILE" || print_warning "Could not create backup"
-        log_message "Backup created: $BACKUP_FILE"
     fi
 }
 
 # Function for pre-flight checks
 preflight_checks() {
     print_info "Running pre-flight checks..."
-    log_message "Starting pre-flight checks"
     local errors=0
     
     # Check disk space (need at least 5GB)
@@ -238,19 +236,16 @@ preflight_checks() {
     
     if [ $errors -gt 0 ]; then
         print_error "Pre-flight checks failed. Please fix the errors above."
-        log_message "Pre-flight checks failed with $errors errors"
         return 1
     fi
     
     print_success "All pre-flight checks passed"
-    log_message "Pre-flight checks passed"
     return 0
 }
 
 # Function to validate configuration
 validate_configuration() {
     print_info "Validating configuration..."
-    log_message "Starting configuration validation"
     local errors=0
     
     if [ -z "$FRONTEND_URL" ]; then
@@ -286,12 +281,10 @@ validate_configuration() {
     
     if [ $errors -gt 0 ]; then
         print_error "Configuration validation failed. Please fix the $errors error(s) above."
-        log_message "Configuration validation failed with $errors errors"
         return 1
     fi
     
     print_success "Configuration validation passed"
-    log_message "Configuration validation passed"
     return 0
 }
 
@@ -299,7 +292,6 @@ validate_configuration() {
 check_services_status() {
     print_info "Checking service status..."
     echo ""
-    log_message "Checking service status"
     
     services=("aether-dashboard" "aether-postgres" "aether-redis")
     all_healthy=true
@@ -314,11 +306,9 @@ check_services_status() {
     done
     
     if [ "$all_healthy" = true ]; then
-        log_message "All services are running"
         return 0
     else
         print_warning "Some services are not running. Check logs: $DOCKER_COMPOSE_CMD logs"
-        log_message "Some services failed to start"
         return 1
     fi
 }
@@ -677,7 +667,6 @@ execute() {
     
     case $action in
         "full")
-            log_message "Starting full installation"
             # Run all steps
             check_prerequisites
             create_configuration
@@ -698,7 +687,6 @@ execute() {
             show_final_summary
             ;;
         "config")
-            log_message "Starting configuration only"
             check_prerequisites
             create_configuration
             if [ "$SKIP_ENV_CREATION" != "true" ]; then
@@ -712,7 +700,6 @@ execute() {
             echo "  2. Run the script again and select 'Build and Start Services'"
             ;;
         "build")
-            log_message "Starting build and start services"
             check_prerequisites
             if [ ! -f .env ]; then
                 print_error ".env file not found. Please run 'Configuration Only' first."
@@ -721,7 +708,6 @@ execute() {
             execute_build_and_start
             ;;
         "migrate")
-            log_message "Running migrations only"
             check_prerequisites
             if [ ! -f .env ]; then
                 print_error ".env file not found. Please run configuration first."
@@ -730,7 +716,6 @@ execute() {
             run_migrations
             ;;
         "verify")
-            log_message "Verifying installation"
             check_prerequisites
             verify_installation
             ;;
@@ -751,7 +736,6 @@ check_prerequisites() {
     echo -e "${BLUE}Checking Prerequisites${NC}"
     echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
     echo ""
-    log_message "Checking prerequisites"
 
 # Check Docker
 if command_exists docker; then
@@ -1203,7 +1187,6 @@ execute() {
     
     case $action in
         "full")
-            log_message "Starting full installation"
             # Run all steps
             check_prerequisites
             create_configuration
@@ -1224,7 +1207,6 @@ execute() {
             show_final_summary
             ;;
         "config")
-            log_message "Starting configuration only"
             check_prerequisites
             create_configuration
             if [ "$SKIP_ENV_CREATION" != "true" ]; then
@@ -1238,7 +1220,6 @@ execute() {
             echo "  2. Run the script again and select 'Build and Start Services'"
             ;;
         "build")
-            log_message "Starting build and start services"
             check_prerequisites
             if [ ! -f .env ]; then
                 print_error ".env file not found. Please run 'Configuration Only' first."
@@ -1247,7 +1228,6 @@ execute() {
             execute_build_and_start
             ;;
         "migrate")
-            log_message "Running migrations only"
             check_prerequisites
             if [ ! -f .env ]; then
                 print_error ".env file not found. Please run configuration first."
@@ -1256,7 +1236,6 @@ execute() {
             run_migrations
             ;;
         "verify")
-            log_message "Verifying installation"
             check_prerequisites
             verify_installation
             ;;
@@ -1280,7 +1259,6 @@ show_final_summary() {
     echo ""
     
     print_info "Waiting for database to be ready..."
-    log_message "Waiting for database to be ready"
     
     # Wait for database with retries
     local db_ready=false
@@ -1296,7 +1274,6 @@ show_final_summary() {
     
     if [ "$db_ready" = false ]; then
         print_error "Database is not ready after 60 seconds"
-        log_message "Database readiness check failed"
         return 1
     fi
     
@@ -1304,15 +1281,12 @@ show_final_summary() {
     sleep 2
     
     print_info "Running database migrations..."
-    log_message "Running database migrations"
     
     if retry_command 3 5 $DOCKER_COMPOSE_CMD exec -T aether-dashboard npm run migrate; then
         print_success "Database migrations completed"
-        log_message "Database migrations completed successfully"
         return 0
     else
         print_warning "Migration command returned an error, but this might be normal if migrations already ran"
-        log_message "Migration command had issues (may be normal if already migrated)"
         return 0  # Don't fail if migrations already ran
     fi
 }
@@ -1340,12 +1314,10 @@ verify_installation() {
     
     if wait_for_health "http://localhost:$PORT/health"; then
         print_success "Aether Dashboard is running and healthy!"
-        log_message "Installation verification successful"
         return 0
     else
         print_warning "Health check failed, but services might still be starting"
         print_info "Wait a few more seconds and check: http://localhost:$PORT/health"
-        log_message "Health check failed (services may still be starting)"
         return 1
     fi
 }
@@ -1363,7 +1335,6 @@ show_installation_summary() {
     echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
     echo ""
     echo -e "  ${BLUE}Configuration File:${NC}  .env"
-    echo -e "  ${BLUE}Log File:${NC}            $LOG_PATH"
     if [ -n "$BACKUP_FILE" ] && [ -f "$BACKUP_FILE" ]; then
         echo -e "  ${BLUE}Backup File:${NC}          $BACKUP_FILE"
     fi
@@ -1433,7 +1404,6 @@ echo ""
     echo ""
     echo -e "${GREEN}Enjoy using Aether Dashboard! 🚀${NC}"
     echo ""
-    log_message "Installation completed successfully"
 }
 
 # Main execution flow
