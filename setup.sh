@@ -562,11 +562,16 @@ check_prerequisites() {
                         compose_available=true
                     fi
                 else
-                print_error "Docker Compose is required but not working." >&2
-                print_info "Please install docker-compose-plugin manually:" >&2
-                echo "  apt-get install docker-compose-plugin" >&2
-                return 1
+                    print_error "Docker Compose is required but not working." >&2
+                    print_info "Please install docker-compose-plugin manually:" >&2
+                    echo "  apt-get install docker-compose-plugin" >&2
+                    return 1
+                fi
             fi
+        else
+            # test_exit is neither 0 nor 2
+            print_error "Unexpected error testing docker-compose" >&2
+            return 1
         fi
     fi
     
