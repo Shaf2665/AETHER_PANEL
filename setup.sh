@@ -1299,7 +1299,6 @@ verify_installation() {
     echo ""
     
     print_info "Checking service health..."
-    log_message "Verifying installation"
     
     # Check services status
     check_services_status
