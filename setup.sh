@@ -5,6 +5,14 @@
 
 set -e
 
+# Script version
+export SCRIPT_VERSION="v1.8.0"
+export GITHUB_REPO="Shaf2665/AETHER_DASHBOARD"
+
+# Logging
+LOG_PATH="/var/log/aether-dashboard-installer.log"
+BACKUP_FILE=""
+
 # Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -12,29 +20,54 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
+# Initialize log file
+mkdir -p "$(dirname "$LOG_PATH")" 2>/dev/null || true
+echo -e "\n\n* Aether Dashboard Installer $(date) - Version $SCRIPT_VERSION \n\n" >> "$LOG_PATH"
+
+# Function to log messages
+log_message() {
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1" >> "$LOG_PATH"
+}
+
 # Banner
-echo -e "${BLUE}"
-echo "╔══════════════════════════════════════════════════════════╗"
-echo "║      Aether Dashboard - Interactive Setup Wizard       ║"
-echo "╚══════════════════════════════════════════════════════════╝"
-echo -e "${NC}"
-echo ""
+welcome() {
+    clear
+    echo -e "${BLUE}"
+    echo "╔══════════════════════════════════════════════════════════╗"
+    echo "║      Aether Dashboard - Interactive Setup Wizard       ║"
+    echo "║                    Version $SCRIPT_VERSION                    ║"
+    echo "╚══════════════════════════════════════════════════════════╝"
+    echo -e "${NC}"
+    echo ""
+    print_info "Welcome to Aether Dashboard installation!"
+    echo ""
+    log_message "Installation started"
+}
 
 # Function to print colored messages
 print_success() {
     echo -e "${GREEN}✓${NC} $1"
+    log_message "SUCCESS: $1"
 }
 
 print_error() {
     echo -e "${RED}✗${NC} $1"
+    log_message "ERROR: $1"
 }
 
 print_warning() {
     echo -e "${YELLOW}⚠${NC} $1"
+    log_message "WARNING: $1"
 }
 
 print_info() {
     echo -e "${BLUE}ℹ${NC} $1"
+    log_message "INFO: $1"
+}
+
+output() {
+    echo -e "$1"
+    log_message "$1"
 }
 
 # Function to check if command exists
@@ -61,6 +94,237 @@ validate_port() {
     if [[ $1 =~ ^[0-9]+$ ]] && [ "$1" -ge 1 ] && [ "$1" -le 65535 ]; then
         return 0
     else
+        return 1
+    fi
+}
+
+# Function to show progress indicator
+show_progress() {
+    local pid=$1
+    local message=$2
+    local spin='-\|/'
+    local i=0
+    
+    echo -n "$message "
+    while kill -0 $pid 2>/dev/null; do
+        i=$(( (i+1) %4 ))
+        printf "\r$message ${spin:$i:1}"
+        sleep 0.1
+    done
+    printf "\r$message ✓\n"
+}
+
+# Function to retry command with exponential backoff
+retry_command() {
+    local max_attempts=$1
+    local delay=$2
+    shift 2
+    local command=("$@")
+    local attempt=1
+    
+    while [ $attempt -le $max_attempts ]; do
+        if "${command[@]}" >> "$LOG_PATH" 2>&1; then
+            return 0
+        fi
+        if [ $attempt -lt $max_attempts ]; then
+            print_warning "Attempt $attempt failed. Retrying in ${delay}s..."
+            sleep $delay
+            delay=$((delay * 2))  # Exponential backoff
+        fi
+        attempt=$((attempt + 1))
+    done
+    
+    print_error "Command failed after $max_attempts attempts"
+    return 1
+}
+
+# Function to wait for service health with retries
+wait_for_health() {
+    local url=$1
+    local max_attempts=30
+    local attempt=1
+    local delay=2
+    
+    print_info "Waiting for service to be healthy..."
+    while [ $attempt -le $max_attempts ]; do
+        if curl -f -s "$url" >/dev/null 2>&1; then
+            print_success "Service is healthy!"
+            return 0
+        fi
+        if [ $attempt -lt $max_attempts ]; then
+            printf "\rWaiting... (attempt $attempt/$max_attempts) "
+            sleep $delay
+            if [ $delay -lt 10 ]; then
+                delay=$((delay + 1))  # Exponential backoff up to 10s
+            fi
+        fi
+        attempt=$((attempt + 1))
+    done
+    
+    printf "\r"
+    print_error "Service health check failed after $max_attempts attempts"
+    return 1
+}
+
+# Function to confirm action
+confirm_action() {
+    local message=$1
+    local default=${2:-"N"}
+    
+    if [ "$default" = "Y" ]; then
+        prompt="(Y/n)"
+    else
+        prompt="(y/N)"
+    fi
+    
+    read -p "$message $prompt: " response
+    response=${response:-$default}
+    
+    if [[ $response =~ ^[Yy]$ ]]; then
+        return 0
+    else
+        return 1
+    fi
+}
+
+# Function to create backup
+create_backup() {
+    if [ -f .env ]; then
+        BACKUP_FILE=".env.backup.$(date +%Y%m%d_%H%M%S)"
+        cp .env "$BACKUP_FILE" 2>/dev/null && print_success "Configuration backed up to $BACKUP_FILE" || print_warning "Could not create backup"
+        log_message "Backup created: $BACKUP_FILE"
+    fi
+}
+
+# Function for pre-flight checks
+preflight_checks() {
+    print_info "Running pre-flight checks..."
+    log_message "Starting pre-flight checks"
+    local errors=0
+    
+    # Check disk space (need at least 5GB)
+    if command_exists df; then
+        available_space=$(df -BG . 2>/dev/null | awk 'NR==2 {print $4}' | sed 's/G//' || echo "0")
+        if [ -n "$available_space" ] && [ "$available_space" -lt 5 ] 2>/dev/null; then
+            print_error "Insufficient disk space. Need at least 5GB, have ${available_space}GB"
+            errors=$((errors + 1))
+        else
+            print_success "Disk space check passed (${available_space}GB available)"
+        fi
+    fi
+    
+    # Check memory (warn if less than 2GB)
+    if command_exists free; then
+        total_mem=$(free -g 2>/dev/null | awk '/^Mem:/{print $2}' || echo "0")
+        if [ -n "$total_mem" ] && [ "$total_mem" -lt 2 ] 2>/dev/null; then
+            print_warning "Low memory detected (${total_mem}GB). Recommended: 2GB+"
+        else
+            print_success "Memory check passed (${total_mem}GB available)"
+        fi
+    fi
+    
+    # Check if ports are available (if PORT is set)
+    if [ -n "$PORT" ]; then
+        if command_exists netstat; then
+            if netstat -tuln 2>/dev/null | grep -q ":$PORT "; then
+                print_error "Port $PORT is already in use"
+                errors=$((errors + 1))
+            else
+                print_success "Port $PORT is available"
+            fi
+        elif command_exists ss; then
+            if ss -tuln 2>/dev/null | grep -q ":$PORT "; then
+                print_error "Port $PORT is already in use"
+                errors=$((errors + 1))
+            else
+                print_success "Port $PORT is available"
+            fi
+        fi
+    fi
+    
+    if [ $errors -gt 0 ]; then
+        print_error "Pre-flight checks failed. Please fix the errors above."
+        log_message "Pre-flight checks failed with $errors errors"
+        return 1
+    fi
+    
+    print_success "All pre-flight checks passed"
+    log_message "Pre-flight checks passed"
+    return 0
+}
+
+# Function to validate configuration
+validate_configuration() {
+    print_info "Validating configuration..."
+    log_message "Starting configuration validation"
+    local errors=0
+    
+    if [ -z "$FRONTEND_URL" ]; then
+        print_error "FRONTEND_URL is required"
+        errors=$((errors + 1))
+    elif ! validate_url "$FRONTEND_URL"; then
+        print_error "FRONTEND_URL must be a valid URL (http:// or https://)"
+        errors=$((errors + 1))
+    fi
+    
+    if [ ${#JWT_SECRET} -lt 32 ]; then
+        print_error "JWT_SECRET must be at least 32 characters"
+        errors=$((errors + 1))
+    fi
+    
+    if [ -z "$DB_PASSWORD" ]; then
+        print_error "Database password is required"
+        errors=$((errors + 1))
+    fi
+    
+    if [ -z "$PTERODACTYL_URL" ]; then
+        print_error "Pterodactyl Panel URL is required"
+        errors=$((errors + 1))
+    elif ! validate_url "$PTERODACTYL_URL"; then
+        print_error "Pterodactyl URL must be a valid URL"
+        errors=$((errors + 1))
+    fi
+    
+    if [ -z "$PTERODACTYL_APPLICATION_API_KEY" ]; then
+        print_error "Pterodactyl Application API Key is required"
+        errors=$((errors + 1))
+    fi
+    
+    if [ $errors -gt 0 ]; then
+        print_error "Configuration validation failed. Please fix the $errors error(s) above."
+        log_message "Configuration validation failed with $errors errors"
+        return 1
+    fi
+    
+    print_success "Configuration validation passed"
+    log_message "Configuration validation passed"
+    return 0
+}
+
+# Function to check services status
+check_services_status() {
+    print_info "Checking service status..."
+    echo ""
+    log_message "Checking service status"
+    
+    services=("aether-dashboard" "aether-postgres" "aether-redis")
+    all_healthy=true
+    
+    for service in "${services[@]}"; do
+        if $DOCKER_COMPOSE_CMD ps 2>/dev/null | grep -q "$service.*Up"; then
+            print_success "$service is running"
+        else
+            print_error "$service is not running"
+            all_healthy=false
+        fi
+    done
+    
+    if [ "$all_healthy" = true ]; then
+        log_message "All services are running"
+        return 0
+    else
+        print_warning "Some services are not running. Check logs: $DOCKER_COMPOSE_CMD logs"
+        log_message "Some services failed to start"
         return 1
     fi
 }
@@ -362,11 +626,131 @@ configure_firewall() {
     fi
 }
 
-# Step 1: Check prerequisites
-echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-echo -e "${BLUE}Step 1: Checking Prerequisites${NC}"
-echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-echo ""
+# Function to show menu
+show_menu() {
+    welcome
+    
+    options=(
+        "Full Installation (Recommended - Configure, Build, Start, Migrate, Verify)"
+        "Configuration Only (Create .env file, skip Docker operations)"
+        "Build and Start Services Only (Skip configuration)"
+        "Run Database Migrations Only"
+        "Verify Installation (Check service status and health)"
+        "Exit"
+    )
+    
+    actions=(
+        "full"
+        "config"
+        "build"
+        "migrate"
+        "verify"
+        "exit"
+    )
+    
+    output "What would you like to do?"
+    echo ""
+    for i in "${!options[@]}"; do
+        echo -e "  [${GREEN}$i${NC}] ${options[$i]}"
+    done
+    echo ""
+    echo -n "* Input 0-$((${#actions[@]} - 1)): "
+    read -r action
+    
+    [ -z "$action" ] && error "Input is required" && return 1
+    
+    valid_input=("$(for ((i = 0; i <= ${#actions[@]} - 1; i += 1)); do echo "${i}"; done)")
+    [[ ! " ${valid_input[*]} " =~ ${action} ]] && print_error "Invalid option" && return 1
+    
+    if [[ " ${valid_input[*]} " =~ ${action} ]]; then
+        echo "${actions[$action]}"
+        return 0
+    fi
+    
+    return 1
+}
+
+# Main execution function
+execute() {
+    local action=$1
+    
+    case $action in
+        "full")
+            log_message "Starting full installation"
+            # Run all steps
+            check_prerequisites
+            create_configuration
+            if [ "$SKIP_ENV_CREATION" != "true" ]; then
+                if ! validate_configuration; then
+                    print_error "Configuration validation failed. Please fix the errors and try again."
+                    exit 1
+                fi
+            fi
+            create_backup
+            if ! preflight_checks; then
+                print_error "Pre-flight checks failed. Please fix the issues and try again."
+                exit 1
+            fi
+            execute_build_and_start
+            run_migrations
+            verify_installation
+            show_final_summary
+            ;;
+        "config")
+            log_message "Starting configuration only"
+            check_prerequisites
+            create_configuration
+            if [ "$SKIP_ENV_CREATION" != "true" ]; then
+                validate_configuration
+            fi
+            create_backup
+            print_success "Configuration completed!"
+            echo ""
+            echo "Next steps:"
+            echo "  1. Review the .env file"
+            echo "  2. Run the script again and select 'Build and Start Services'"
+            ;;
+        "build")
+            log_message "Starting build and start services"
+            check_prerequisites
+            if [ ! -f .env ]; then
+                print_error ".env file not found. Please run 'Configuration Only' first."
+                exit 1
+            fi
+            execute_build_and_start
+            ;;
+        "migrate")
+            log_message "Running migrations only"
+            check_prerequisites
+            if [ ! -f .env ]; then
+                print_error ".env file not found. Please run configuration first."
+                exit 1
+            fi
+            run_migrations
+            ;;
+        "verify")
+            log_message "Verifying installation"
+            check_prerequisites
+            verify_installation
+            ;;
+        "exit")
+            print_info "Exiting installer"
+            exit 0
+            ;;
+        *)
+            print_error "Unknown action: $action"
+            exit 1
+            ;;
+    esac
+}
+
+# Function to check prerequisites (extracted from main flow)
+check_prerequisites() {
+    echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo -e "${BLUE}Checking Prerequisites${NC}"
+    echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo ""
+    log_message "Checking prerequisites"
 
 # Check Docker
 if command_exists docker; then
@@ -807,9 +1191,88 @@ DAILY_LOGIN_ENABLED=$DAILY_LOGIN_ENABLED
 DAILY_LOGIN_COINS=25
 EOF
 
-    print_success ".env file created successfully"
-    echo ""
-fi
+        print_success ".env file created successfully"
+        echo ""
+    fi
+}
+
+# Main execution function
+execute() {
+    local action=$1
+    
+    case $action in
+        "full")
+            log_message "Starting full installation"
+            # Run all steps
+            check_prerequisites
+            create_configuration
+            if [ "$SKIP_ENV_CREATION" != "true" ]; then
+                if ! validate_configuration; then
+                    print_error "Configuration validation failed. Please fix the errors and try again."
+                    exit 1
+                fi
+            fi
+            create_backup
+            if ! preflight_checks; then
+                print_error "Pre-flight checks failed. Please fix the issues and try again."
+                exit 1
+            fi
+            execute_build_and_start
+            run_migrations
+            verify_installation
+            show_final_summary
+            ;;
+        "config")
+            log_message "Starting configuration only"
+            check_prerequisites
+            create_configuration
+            if [ "$SKIP_ENV_CREATION" != "true" ]; then
+                validate_configuration
+            fi
+            create_backup
+            print_success "Configuration completed!"
+            echo ""
+            echo "Next steps:"
+            echo "  1. Review the .env file"
+            echo "  2. Run the script again and select 'Build and Start Services'"
+            ;;
+        "build")
+            log_message "Starting build and start services"
+            check_prerequisites
+            if [ ! -f .env ]; then
+                print_error ".env file not found. Please run 'Configuration Only' first."
+                exit 1
+            fi
+            execute_build_and_start
+            ;;
+        "migrate")
+            log_message "Running migrations only"
+            check_prerequisites
+            if [ ! -f .env ]; then
+                print_error ".env file not found. Please run configuration first."
+                exit 1
+            fi
+            run_migrations
+            ;;
+        "verify")
+            log_message "Verifying installation"
+            check_prerequisites
+            verify_installation
+            ;;
+        "exit")
+            print_info "Exiting installer"
+            exit 0
+            ;;
+        *)
+            print_error "Unknown action: $action"
+            exit 1
+            ;;
+    esac
+}
+
+# Function to show final summary
+show_final_summary() {
+    show_installation_summary
 
 # Step 5: Build and start services
 echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
@@ -848,52 +1311,101 @@ else
     exit 1
 fi
 
-# Step 6: Run migrations
-echo ""
-echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-echo -e "${BLUE}Step 5: Setting Up Database${NC}"
-echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-echo ""
-
-print_info "Waiting for database to be ready..."
-sleep 5
-
-print_info "Running database migrations..."
-if $DOCKER_COMPOSE_CMD exec -T aether-dashboard npm run migrate >/dev/null 2>&1; then
-    print_success "Database migrations completed"
-else
-    print_warning "Migration command returned an error, but this might be normal if migrations already ran"
-    print_info "Checking database connection..."
+# Function to run migrations
+run_migrations() {
+    echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo -e "${BLUE}Setting Up Database${NC}"
+    echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo ""
+    
+    print_info "Waiting for database to be ready..."
+    log_message "Waiting for database to be ready"
+    
+    # Wait for database with retries
+    local db_ready=false
+    for i in {1..30}; do
+        if $DOCKER_COMPOSE_CMD exec -T aether-postgres pg_isready -U postgres >/dev/null 2>&1; then
+            db_ready=true
+            break
+        fi
+        printf "\rWaiting for database... (attempt $i/30) "
+        sleep 2
+    done
+    printf "\r"
+    
+    if [ "$db_ready" = false ]; then
+        print_error "Database is not ready after 60 seconds"
+        log_message "Database readiness check failed"
+        return 1
+    fi
+    
+    print_success "Database is ready"
     sleep 2
-fi
+    
+    print_info "Running database migrations..."
+    log_message "Running database migrations"
+    
+    if retry_command 3 5 $DOCKER_COMPOSE_CMD exec -T aether-dashboard npm run migrate; then
+        print_success "Database migrations completed"
+        log_message "Database migrations completed successfully"
+        return 0
+    else
+        print_warning "Migration command returned an error, but this might be normal if migrations already ran"
+        log_message "Migration command had issues (may be normal if already migrated)"
+        return 0  # Don't fail if migrations already ran
+    fi
+}
 
-# Step 7: Verify installation
-echo ""
-echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-echo -e "${BLUE}Step 6: Verifying Installation${NC}"
-echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-echo ""
+# Function to verify installation
+verify_installation() {
+    echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo -e "${BLUE}Verifying Installation${NC}"
+    echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo ""
+    
+    print_info "Checking service health..."
+    log_message "Verifying installation"
+    
+    # Check services status
+    check_services_status
+    echo ""
+    
+    # Health check with retries
+    if wait_for_health "http://localhost:$PORT/health"; then
+        print_success "Aether Dashboard is running and healthy!"
+        log_message "Installation verification successful"
+        return 0
+    else
+        print_warning "Health check failed, but services might still be starting"
+        print_info "Wait a few more seconds and check: http://localhost:$PORT/health"
+        log_message "Health check failed (services may still be starting)"
+        return 1
+    fi
+}
 
-print_info "Checking service health..."
-sleep 5
-
-if curl -f -s http://localhost:$PORT/health >/dev/null 2>&1; then
-    print_success "Aether Dashboard is running and healthy!"
-else
-    print_warning "Health check failed, but services might still be starting"
-    print_info "Wait a few more seconds and check: http://localhost:$PORT/health"
-fi
-
-# Final summary
-echo ""
-echo -e "${GREEN}╔══════════════════════════════════════════════════════════╗${NC}"
-echo -e "${GREEN}║              Installation Complete! 🎉                  ║${NC}"
-echo -e "${GREEN}╚══════════════════════════════════════════════════════════╝${NC}"
-echo ""
-echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-echo -e "${GREEN}Access Your Aether Dashboard:${NC}"
-echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-echo ""
+# Function to show installation summary
+show_installation_summary() {
+    echo ""
+    echo -e "${GREEN}╔══════════════════════════════════════════════════════════╗${NC}"
+    echo -e "${GREEN}║              Installation Complete! 🎉                  ║${NC}"
+    echo -e "${GREEN}╚══════════════════════════════════════════════════════════╝${NC}"
+    echo ""
+    
+    echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo -e "${GREEN}Installation Summary:${NC}"
+    echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo ""
+    echo -e "  ${BLUE}Configuration File:${NC}  .env"
+    echo -e "  ${BLUE}Log File:${NC}            $LOG_PATH"
+    if [ -n "$BACKUP_FILE" ] && [ -f "$BACKUP_FILE" ]; then
+        echo -e "  ${BLUE}Backup File:${NC}          $BACKUP_FILE"
+    fi
+    echo ""
+    
+    echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo -e "${GREEN}Access Your Aether Dashboard:${NC}"
+    echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo ""
 
 # Get VPS IP for display
 VPS_IP=$(get_vps_ip)
@@ -946,12 +1458,31 @@ echo "  3. Configure your Pterodactyl Panel integration"
 echo "  4. Start managing game servers!"
 echo ""
 
-# Configure firewall
-if [ -n "$PORT" ]; then
-    configure_firewall "$PORT"
-fi
+    # Configure firewall
+    if [ -n "$PORT" ]; then
+        configure_firewall "$PORT"
+    fi
+    
+    echo ""
+    echo -e "${GREEN}Enjoy using Aether Dashboard! 🚀${NC}"
+    echo ""
+    log_message "Installation completed successfully"
+}
 
-echo ""
-echo -e "${GREEN}Enjoy using Aether Dashboard! 🚀${NC}"
-echo ""
+# Main execution flow
+main() {
+    # Show menu and get user choice
+    selected_action=$(show_menu)
+    
+    if [ -z "$selected_action" ]; then
+        print_error "Invalid selection"
+        exit 1
+    fi
+    
+    # Execute selected action
+    execute "$selected_action"
+}
+
+# Run main function
+main
 
