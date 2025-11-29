@@ -4,6 +4,19 @@ const pool = require('../config/database');
 
 class CoinService {
   async addCoins(userId, amount, source, description) {
+    // Validate amount limits to prevent integer overflow
+    const MAX_COIN_AMOUNT = 1000000000; // 1 billion coins max
+    const MIN_COIN_AMOUNT = -1000000000; // -1 billion coins min
+    
+    if (Math.abs(amount) > MAX_COIN_AMOUNT) {
+      throw new Error(`Coin amount exceeds maximum limit of ${MAX_COIN_AMOUNT}`);
+    }
+    
+    // Validate description length
+    if (description && description.length > 500) {
+      throw new Error('Description exceeds maximum length of 500 characters');
+    }
+    
     // Update user coins
     const user = await User.updateCoins(userId, amount);
     
@@ -13,7 +26,7 @@ class CoinService {
       type: amount > 0 ? 'earned' : 'spent',
       amount: Math.abs(amount),
       source,
-      description,
+      description: description ? description.substring(0, 500) : description, // Truncate if too long
     });
 
     return user;

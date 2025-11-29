@@ -1,8 +1,37 @@
+// Sanitize error messages to prevent information disclosure
+function sanitizeError(error) {
+  if (typeof error !== 'string') {
+    error = String(error);
+  }
+  
+  // Remove potential sensitive information
+  const sensitivePatterns = [
+    /password/gi,
+    /secret/gi,
+    /token/gi,
+    /key/gi,
+    /api[_-]?key/gi,
+    /authorization/gi,
+    /bearer/gi,
+  ];
+  
+  let sanitized = error;
+  sensitivePatterns.forEach(pattern => {
+    sanitized = sanitized.replace(pattern, '[REDACTED]');
+  });
+  
+  return sanitized;
+}
+
 const errorHandler = (err, req, res, next) => {
-  // Log error with context
+  // Log error with context (sanitized in production)
+  const isProduction = process.env.NODE_ENV === 'production';
+  const errorMessage = isProduction ? sanitizeError(err.message) : err.message;
+  const errorStack = isProduction ? undefined : err.stack;
+  
   console.error('Error:', {
-    message: err.message,
-    stack: err.stack,
+    message: errorMessage,
+    ...(errorStack && { stack: errorStack }),
     url: req.url,
     method: req.method,
     ip: req.ip,

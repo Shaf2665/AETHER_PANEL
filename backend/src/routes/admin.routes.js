@@ -209,13 +209,29 @@ router.delete('/users/:id', [
 // Manually adjust user coins
 router.post('/users/:id/coins', [
   param('id').isUUID(),
-  body('amount').isFloat(),
-  body('description').optional().isString().trim(),
+  body('amount').isFloat({ min: -1000000, max: 1000000 }).withMessage('Amount must be between -1,000,000 and 1,000,000'),
+  body('description').optional().isString().trim().isLength({ max: 500 }).withMessage('Description must be 500 characters or less'),
   validate
 ], async (req, res, next) => {
   try {
     const { amount, description } = req.body;
     const userId = req.params.id;
+    
+    // Additional validation: Prevent setting negative balance
+    if (amount < 0) {
+      const user = await User.findById(userId);
+      if (!user) {
+        return res.status(404).json({ error: 'User not found' });
+      }
+      const currentBalance = parseFloat(user.coins) || 0;
+      if (Math.abs(amount) > currentBalance) {
+        return res.status(400).json({ 
+          error: 'Cannot set user balance below zero',
+          currentBalance,
+          requestedAdjustment: amount
+        });
+      }
+    }
 
     // Check if user exists
     const user = await User.findById(userId);
@@ -243,8 +259,8 @@ router.get('/servers', [
   query('page').optional().isInt({ min: 1 }).toInt(),
   query('limit').optional().isInt({ min: 1, max: 100 }).toInt(),
   query('userId').optional().isUUID(),
-  query('gameType').optional().isString(),
-  query('status').optional().isString(),
+  query('gameType').optional().isIn(['minecraft', 'fivem', 'other']).withMessage('Invalid game type'),
+  query('status').optional().isIn(['active', 'suspended', 'deleted']).withMessage('Invalid status'),
   validate
 ], async (req, res, next) => {
   try {

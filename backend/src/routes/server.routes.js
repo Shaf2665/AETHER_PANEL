@@ -90,9 +90,9 @@ router.post(
   [
     body('name').trim().isLength({ min: 1, max: 50 }),
     body('game_type').isIn(['minecraft', 'fivem', 'other']),
-    body('cpu_limit').isInt({ min: 1 }),
-    body('memory_limit').isInt({ min: 512 }),
-    body('disk_limit').isInt({ min: 1024 }),
+    body('cpu_limit').isInt({ min: 1, max: 1000 }).withMessage('CPU limit must be between 1 and 1000'),
+    body('memory_limit').isInt({ min: 512, max: 32768 }).withMessage('Memory limit must be between 512MB and 32768MB'),
+    body('disk_limit').isInt({ min: 1024, max: 1000000 }).withMessage('Disk limit must be between 1024MB and 1000000MB'),
   ],
   validate,
   async (req, res, next) => {
@@ -100,6 +100,15 @@ router.post(
     
     try {
       const { name, game_type, cpu_limit, memory_limit, disk_limit } = req.body;
+      
+      // Check server count limit (max 20 servers per user)
+      const existingServers = await Server.findByUserId(req.user.id);
+      const MAX_SERVERS_PER_USER = parseInt(process.env.MAX_SERVERS_PER_USER || '20');
+      if (existingServers.length >= MAX_SERVERS_PER_USER) {
+        return res.status(400).json({ 
+          error: `Maximum server limit reached (${MAX_SERVERS_PER_USER} servers per user)` 
+        });
+      }
       
       // Calculate server creation cost
       const cost = calculateServerCost(cpu_limit, memory_limit, disk_limit);
@@ -211,9 +220,9 @@ router.put(
   '/:id/resources',
   [
     param('id').isUUID().withMessage('Invalid server ID format'),
-    body('cpu_limit').optional().isInt({ min: 1 }),
-    body('memory_limit').optional().isInt({ min: 512 }),
-    body('disk_limit').optional().isInt({ min: 1024 }),
+    body('cpu_limit').optional().isInt({ min: 1, max: 1000 }).withMessage('CPU limit must be between 1 and 1000'),
+    body('memory_limit').optional().isInt({ min: 512, max: 32768 }).withMessage('Memory limit must be between 512MB and 32768MB'),
+    body('disk_limit').optional().isInt({ min: 1024, max: 1000000 }).withMessage('Disk limit must be between 1024MB and 1000000MB'),
   ],
   validate,
   async (req, res, next) => {

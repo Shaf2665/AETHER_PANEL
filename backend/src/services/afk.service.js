@@ -55,7 +55,7 @@ class AFKService {
     };
   }
 
-  async updateSession(userId, minutes) {
+  async updateSession(userId) {
     const sessionKey = `afk:session:${userId}`;
     const sessionData = await redis.get(sessionKey);
 

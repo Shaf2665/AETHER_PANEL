@@ -184,6 +184,11 @@ class User {
       paramCount++;
     }
     if (email !== undefined) {
+      // Check if email already exists for another user
+      const existingUser = await this.findByEmail(email);
+      if (existingUser && existingUser.id !== userId) {
+        throw new Error('Email already in use by another user');
+      }
       updates.push(`email = $${paramCount}`);
       values.push(email);
       paramCount++;

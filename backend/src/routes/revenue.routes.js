@@ -1,5 +1,8 @@
 const express = require('express');
+const rateLimit = require('express-rate-limit');
+const { body } = require('express-validator');
 const { authenticate } = require('../middleware/auth.middleware');
+const { validate } = require('../middleware/validation.middleware');
 const linkvertiseService = require('../services/linkvertise.service');
 const afkService = require('../services/afk.service');
 const coinService = require('../services/coin.service');
@@ -8,8 +11,18 @@ const redis = require('../config/redis');
 
 const router = express.Router();
 
-// All routes require authentication
+// Stricter rate limiting for revenue endpoints (prevent coin farming)
+const revenueLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minute
+  max: 10, // 10 requests per minute
+  message: 'Too many requests to revenue endpoints, please slow down.',
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+// All routes require authentication and rate limiting
 router.use(authenticate);
+router.use(revenueLimiter);
 
 // Get available revenue tasks
 router.get('/tasks', async (req, res, next) => {
@@ -22,9 +35,51 @@ router.get('/tasks', async (req, res, next) => {
 });
 
 // Generate Linkvertise link
-router.post('/linkvertise/generate', async (req, res, next) => {
+router.post('/linkvertise/generate', [
+  body('targetUrl').isURL({ 
+    protocols: ['http', 'https'], 
+    require_protocol: true,
+    require_valid_protocol: true
+  }).withMessage('Invalid URL format. Must be http:// or https://'),
+], validate, async (req, res, next) => {
   try {
     const { targetUrl } = req.body;
+    
+    // Additional security: Validate URL is not internal/localhost
+    try {
+      const url = new URL(targetUrl);
+      const hostname = url.hostname.toLowerCase();
+      
+      // Block internal/localhost URLs to prevent SSRF
+      if (hostname === 'localhost' || 
+          hostname === '127.0.0.1' || 
+          hostname === '0.0.0.0' ||
+          hostname.startsWith('192.168.') ||
+          hostname.startsWith('10.') ||
+          hostname.startsWith('172.16.') ||
+          hostname.startsWith('172.17.') ||
+          hostname.startsWith('172.18.') ||
+          hostname.startsWith('172.19.') ||
+          hostname.startsWith('172.20.') ||
+          hostname.startsWith('172.21.') ||
+          hostname.startsWith('172.22.') ||
+          hostname.startsWith('172.23.') ||
+          hostname.startsWith('172.24.') ||
+          hostname.startsWith('172.25.') ||
+          hostname.startsWith('172.26.') ||
+          hostname.startsWith('172.27.') ||
+          hostname.startsWith('172.28.') ||
+          hostname.startsWith('172.29.') ||
+          hostname.startsWith('172.30.') ||
+          hostname.startsWith('172.31.') ||
+          hostname === '[::1]' ||
+          hostname === '::1') {
+        return res.status(400).json({ error: 'Invalid URL: Internal/localhost URLs are not allowed' });
+      }
+    } catch (urlError) {
+      return res.status(400).json({ error: 'Invalid URL format' });
+    }
+    
     const link = await linkvertiseService.generateLink(req.user.id, targetUrl);
     
     // Create revenue task
@@ -46,7 +101,9 @@ router.post('/linkvertise/generate', async (req, res, next) => {
 });
 
 // Complete Linkvertise task
-router.post('/linkvertise/complete', async (req, res, next) => {
+router.post('/linkvertise/complete', [
+  body('linkId').notEmpty().trim().isLength({ min: 1, max: 255 }).withMessage('Link ID is required and must be 255 characters or less'),
+], validate, async (req, res, next) => {
   try {
     const { linkId } = req.body;
     
