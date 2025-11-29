@@ -15,10 +15,6 @@ if [ -t 1 ] && command -v stdbuf >/dev/null 2>&1; then
     exec > >(stdbuf -oL -eL cat 2>/dev/null) 2>&1 2>/dev/null || true
 fi
 
-# Disable exit on error at startup - we'll handle errors explicitly
-# This prevents silent exits before any output is shown
-set +e
-
 # Script version
 SCRIPT_VERSION="v2.0.0"
 
@@ -1278,10 +1274,6 @@ show_menu() {
 # ============================================================================
 
 main() {
-    # Re-enable error handling in main function for better error reporting
-    # But use 'set -e' carefully - only for critical operations
-    set +e  # Keep it disabled for now, handle errors explicitly
-    
     # Force output immediately
     echo "" >&1
     sync 2>/dev/null || true
