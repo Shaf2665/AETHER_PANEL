@@ -3,7 +3,21 @@
 # Aether Dashboard - User-Friendly Setup Script
 # This script provides an easy way to install and configure Aether Dashboard
 
-set -e
+# Force immediate output flushing - critical for preventing hangs
+# Ensure stdout and stderr are properly connected and unbuffered
+# Use simple redirection that works in all environments
+exec >&1 2>&2
+
+# Try to disable output buffering if possible (non-blocking)
+# Check for stdbuf without using command_exists (defined later)
+if [ -t 1 ] && command -v stdbuf >/dev/null 2>&1; then
+    # Use stdbuf if available, but don't fail if it doesn't work
+    exec > >(stdbuf -oL -eL cat 2>/dev/null) 2>&1 2>/dev/null || true
+fi
+
+# Disable exit on error at startup - we'll handle errors explicitly
+# This prevents silent exits before any output is shown
+set +e
 
 # Script version
 SCRIPT_VERSION="v2.0.0"
@@ -49,7 +63,13 @@ command_exists() {
 }
 
 generate_secret() {
-    openssl rand -base64 32 | tr -d "=+/" | cut -c1-32
+    # Use openssl if available, otherwise fallback to /dev/urandom
+    if command_exists openssl; then
+        openssl rand -base64 32 2>/dev/null | tr -d "=+/" | cut -c1-32 || \
+        cat /dev/urandom | tr -dc 'a-zA-Z0-9' | fold -w 32 | head -n 1
+    else
+        cat /dev/urandom | tr -dc 'a-zA-Z0-9' | fold -w 32 | head -n 1
+    fi
 }
 
 validate_url() {
@@ -82,12 +102,12 @@ detect_os() {
 }
 
 get_vps_ip() {
-    # Try multiple methods to get the public IP
+    # Try multiple methods to get the public IP with timeouts to prevent hanging
     if command_exists curl; then
-        IP=$(curl -s --max-time 5 https://api.ipify.org 2>/dev/null || \
-             curl -s --max-time 5 https://ifconfig.me 2>/dev/null || \
-             curl -s --max-time 5 https://icanhazip.com 2>/dev/null)
-        if [ -n "$IP" ]; then
+        IP=$(timeout 3 curl -s --max-time 3 https://api.ipify.org 2>/dev/null || \
+             timeout 3 curl -s --max-time 3 https://ifconfig.me 2>/dev/null || \
+             timeout 3 curl -s --max-time 3 https://icanhazip.com 2>/dev/null || true)
+        if [ -n "$IP" ] && [ "$IP" != "127.0.0.1" ] && [ "$IP" != "" ]; then
             echo "$IP"
             return 0
         fi
@@ -95,8 +115,8 @@ get_vps_ip() {
     
     # Fallback to local network interfaces
     if command_exists ip; then
-        IP=$(ip route get 8.8.8.8 2>/dev/null | awk '{print $7; exit}' | head -1)
-        if [ -n "$IP" ] && [ "$IP" != "127.0.0.1" ]; then
+        IP=$(ip route get 8.8.8.8 2>/dev/null 2>&1 | awk '{print $7; exit}' | head -1)
+        if [ -n "$IP" ] && [ "$IP" != "127.0.0.1" ] && [ "$IP" != "" ]; then
             echo "$IP"
             return 0
         fi
@@ -105,7 +125,7 @@ get_vps_ip() {
     # Last resort: check hostname -I
     if command_exists hostname; then
         IP=$(hostname -I 2>/dev/null | awk '{print $1}')
-        if [ -n "$IP" ] && [ "$IP" != "127.0.0.1" ]; then
+        if [ -n "$IP" ] && [ "$IP" != "127.0.0.1" ] && [ "$IP" != "" ]; then
             echo "$IP"
             return 0
         fi
@@ -125,7 +145,12 @@ confirm_action() {
         prompt="(y/N)"
     fi
     
-    read -p "$message $prompt: " response
+    # Force output flush before reading
+    sync 2>/dev/null || true
+    exec >&1 2>&2
+    
+    # Use explicit TTY redirection for better compatibility
+    read -r -p "$message $prompt: " response </dev/tty 2>/dev/null || read -r -p "$message $prompt: " response
     response=${response:-$default}
     
     if [[ $response =~ ^[Yy]$ ]]; then
@@ -136,7 +161,12 @@ confirm_action() {
 }
 
 flush_output() {
-    exec >&1
+    # Force immediate output flush
+    sync 2>/dev/null || true
+    # Ensure stdout/stderr are properly connected
+    exec >&1 2>&2
+    # Try to flush any buffered output
+    [ -t 1 ] && stty -echo 2>/dev/null || true
 }
 
 # ============================================================================
@@ -1181,42 +1211,52 @@ show_summary() {
 # ============================================================================
 
 show_menu() {
-    # Only clear if we have a TTY (interactive terminal)
-    [ -t 1 ] && clear 2>/dev/null || true
+    # Don't use clear - it can hang in some environments
+    # Instead, print a separator line if we have a TTY
+    if [ -t 1 ]; then
+        # Print separator instead of clearing screen
+        echo ""
+        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        echo ""
+    fi
     
-    echo -e "${BLUE}"
-    echo "╔══════════════════════════════════════════════════════════╗"
-    echo "║      Aether Dashboard - Setup Wizard                    ║"
-    echo "║                    Version $SCRIPT_VERSION                    ║"
-    echo "╚══════════════════════════════════════════════════════════╝"
-    echo -e "${NC}"
-    echo ""
-    print_info "Welcome to Aether Dashboard installation!"
-    echo ""
+    # Force immediate output - use explicit redirection
+    echo -e "${BLUE}" 1>&1
+    echo "╔══════════════════════════════════════════════════════════╗" 1>&1
+    echo "║      Aether Dashboard - Setup Wizard                    ║" 1>&1
+    echo "║                    Version $SCRIPT_VERSION                    ║" 1>&1
+    echo "╚══════════════════════════════════════════════════════════╝" 1>&1
+    echo -e "${NC}" 1>&1
+    echo "" 1>&1
+    print_info "Welcome to Aether Dashboard installation!" 1>&1
+    echo "" 1>&1
     
-    # Flush output before reading
-    flush_output
+    # Force flush output immediately
+    sync 2>/dev/null || true
     
     # Check if we have an interactive terminal
     if [ ! -t 0 ]; then
-        print_error "This script requires an interactive terminal"
+        print_error "This script requires an interactive terminal" 1>&1
         exit 1
     fi
     
-    echo "What would you like to do?"
-    echo ""
-    echo -e "  [${GREEN}1${NC}] Install Prerequisites Only (Docker & Docker Compose)"
-    echo -e "  [${GREEN}2${NC}] Full Installation (Recommended)"
-    echo -e "  [${GREEN}3${NC}] Configuration Only (Create .env file)"
-    echo -e "  [${GREEN}4${NC}] Build & Start Services"
-    echo -e "  [${GREEN}5${NC}] Run Database Migrations"
-    echo -e "  [${GREEN}6${NC}] Verify Installation"
-    echo -e "  [${GREEN}7${NC}] Exit"
-    echo ""
-    echo -n "Enter your choice [1-7]: "
+    echo "What would you like to do?" 1>&1
+    echo "" 1>&1
+    echo -e "  [${GREEN}1${NC}] Install Prerequisites Only (Docker & Docker Compose)" 1>&1
+    echo -e "  [${GREEN}2${NC}] Full Installation (Recommended)" 1>&1
+    echo -e "  [${GREEN}3${NC}] Configuration Only (Create .env file)" 1>&1
+    echo -e "  [${GREEN}4${NC}] Build & Start Services" 1>&1
+    echo -e "  [${GREEN}5${NC}] Run Database Migrations" 1>&1
+    echo -e "  [${GREEN}6${NC}] Verify Installation" 1>&1
+    echo -e "  [${GREEN}7${NC}] Exit" 1>&1
+    echo "" 1>&1
     
-    flush_output
-    read -r choice
+    # Force output flush before reading
+    sync 2>/dev/null || true
+    exec >&1 2>&2
+    
+    # Use explicit prompt with -p flag for better compatibility
+    read -r -p "Enter your choice [1-7]: " choice </dev/tty 2>/dev/null || read -r -p "Enter your choice [1-7]: " choice
     
     case $choice in
         1) echo "prerequisites" ;;
@@ -1238,10 +1278,18 @@ show_menu() {
 # ============================================================================
 
 main() {
+    # Re-enable error handling in main function for better error reporting
+    # But use 'set -e' carefully - only for critical operations
+    set +e  # Keep it disabled for now, handle errors explicitly
+    
+    # Force output immediately
+    echo "" >&1
+    sync 2>/dev/null || true
+    
     local action=$(show_menu)
     
     if [ -z "$action" ]; then
-        print_error "Invalid selection"
+        print_error "Invalid selection" >&1
         exit 1
     fi
     
