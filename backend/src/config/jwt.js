@@ -9,7 +9,7 @@ if (!jwtSecret) {
 }
 
 if (jwtSecret === 'your-secret-key' || jwtSecret.length < 32) {
-  console.warn('⚠️  WARNING: JWT_SECRET is using a weak or default value. Please use a strong, random secret (at least 32 characters).');
+  throw new Error('CRITICAL SECURITY ERROR: JWT_SECRET must be at least 32 characters long and cannot use the default value "your-secret-key". Please set a strong, random secret in your .env file. Application cannot start with a weak secret.');
 }
 
 module.exports = {
