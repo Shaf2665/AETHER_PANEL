@@ -47,6 +47,8 @@ welcome() {
     echo "╚══════════════════════════════════════════════════════════╝"
     echo -e "${NC}"
     echo ""
+    # Ensure output is flushed
+    exec >&1
     print_info "Welcome to Aether Dashboard installation!"
     echo ""
     log_message "Installation started"
@@ -671,6 +673,13 @@ show_menu() {
     done
     echo ""
     echo -n "* Input 0-$((${#actions[@]} - 1)): "
+    # Flush output before reading
+    exec >&1
+    # Check if we have an interactive terminal
+    if [ ! -t 0 ]; then
+        print_error "This script requires an interactive terminal"
+        exit 1
+    fi
     read -r action
     
     [ -z "$action" ] && print_error "Input is required" && return 1
