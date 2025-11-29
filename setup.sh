@@ -657,7 +657,7 @@ show_menu() {
     echo -n "* Input 0-$((${#actions[@]} - 1)): "
     read -r action
     
-    [ -z "$action" ] && error "Input is required" && return 1
+    [ -z "$action" ] && print_error "Input is required" && return 1
     
     valid_input=("$(for ((i = 0; i <= ${#actions[@]} - 1; i += 1)); do echo "${i}"; done)")
     [[ ! " ${valid_input[*]} " =~ ${action} ]] && print_error "Invalid option" && return 1
@@ -1273,46 +1273,6 @@ execute() {
 # Function to show final summary
 show_final_summary() {
     show_installation_summary
-
-# Step 5: Build and start services
-echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-echo -e "${BLUE}Step 4: Building and Starting Services${NC}"
-echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-echo ""
-
-read -p "Do you want to build and start the services now? (Y/n): " start_services
-if [[ $start_services =~ ^[Nn]$ ]]; then
-    print_info "Skipping service startup"
-    echo ""
-    echo "To start services later, run:"
-    echo "  $DOCKER_COMPOSE_CMD up -d"
-    exit 0
-fi
-
-echo ""
-print_info "Building Docker images (this may take a few minutes)..."
-$DOCKER_COMPOSE_CMD build
-
-echo ""
-print_info "Starting services..."
-$DOCKER_COMPOSE_CMD up -d
-
-echo ""
-print_info "Waiting for services to be ready..."
-sleep 10
-
-# Check if services are running
-if $DOCKER_COMPOSE_CMD ps | grep -q "Up"; then
-    print_success "Services are running"
-else
-    print_error "Some services failed to start"
-    echo ""
-    echo "Check logs with: $DOCKER_COMPOSE_CMD logs"
-    exit 1
-fi
-
-# Function to run migrations
-run_migrations() {
     echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
     echo -e "${BLUE}Setting Up Database${NC}"
     echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
@@ -1371,6 +1331,12 @@ verify_installation() {
     echo ""
     
     # Health check with retries
+    # Load PORT from .env if not set
+    if [ -z "$PORT" ] && [ -f .env ]; then
+        PORT=$(grep "^PORT=" .env | cut -d'=' -f2 | tr -d '"' || echo "5000")
+    fi
+    PORT=${PORT:-5000}
+    
     if wait_for_health "http://localhost:$PORT/health"; then
         print_success "Aether Dashboard is running and healthy!"
         log_message "Installation verification successful"
