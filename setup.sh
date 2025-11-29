@@ -141,13 +141,27 @@ confirm_action() {
         prompt="(y/N)"
     fi
     
-    # Force output flush before reading
+    # Force output flush before reading - ensure all previous output is visible
     sync 2>/dev/null || true
-    exec >&1 2>&2
     
-    # Use explicit TTY redirection for better compatibility
-    read -r -p "$message $prompt: " response </dev/tty 2>/dev/null || read -r -p "$message $prompt: " response
+    # Display prompt to stderr (user-facing output) so it's always visible
+    echo -n "$message $prompt: " >&2
+    
+    # Force flush the prompt immediately
+    sync 2>/dev/null || true
+    
+    # Read from terminal directly - try /dev/tty first, fallback to stdin
+    if [ -t 0 ] && [ -r /dev/tty ]; then
+        read -r response </dev/tty
+    else
+        read -r response
+    fi
+    
+    # Use default if empty response
     response=${response:-$default}
+    
+    # Echo the response to stderr for visibility (optional, for debugging)
+    # echo "" >&2  # New line after response
     
     if [[ $response =~ ^[Yy]$ ]]; then
         return 0
@@ -439,28 +453,32 @@ test_docker_compose() {
 }
 
 check_prerequisites() {
-    print_header "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    print_header "Checking Prerequisites"
-    print_header "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo ""
+    print_header "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" >&2
+    print_header "Checking Prerequisites" >&2
+    print_header "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" >&2
+    echo "" >&2
     
     # Check Docker
     if command_exists docker; then
         local DOCKER_VERSION=$(docker --version | awk '{print $3}' | sed 's/,//')
-        print_success "Docker is installed (version: $DOCKER_VERSION)"
+        print_success "Docker is installed (version: $DOCKER_VERSION)" >&2
     else
-        print_error "Docker is not installed"
-        echo ""
+        print_error "Docker is not installed" >&2
+        echo "" >&2
+        
+        # Force flush before showing prompt
+        sync 2>/dev/null || true
+        
         if confirm_action "Do you want to install Docker automatically?" "Y"; then
             if install_docker; then
-                print_success "Docker installation completed"
+                print_success "Docker installation completed" >&2
             else
-                print_error "Docker installation failed. Please install manually:"
-                echo "  - Linux: https://docs.docker.com/engine/install/"
+                print_error "Docker installation failed. Please install manually:" >&2
+                echo "  - Linux: https://docs.docker.com/engine/install/" >&2
                 return 1
             fi
         else
-            print_error "Docker is required. Please install it first."
+            print_error "Docker is required. Please install it first." >&2
             return 1
         fi
     fi
@@ -473,7 +491,7 @@ check_prerequisites() {
     if docker compose version >/dev/null 2>&1; then
         if test_docker_compose "docker compose"; then
             local COMPOSE_VERSION=$(docker compose version | awk '{print $4}')
-            print_success "Docker Compose is installed (version: $COMPOSE_VERSION) - v2 plugin"
+            print_success "Docker Compose is installed (version: $COMPOSE_VERSION) - v2 plugin" >&2
             DOCKER_COMPOSE_CMD="docker compose"
             compose_available=true
         fi
@@ -486,14 +504,18 @@ check_prerequisites() {
         
         if [ $test_exit -eq 0 ]; then
             local COMPOSE_VERSION=$(docker-compose --version | awk '{print $3}' | sed 's/,//')
-            print_success "Docker Compose is installed (version: $COMPOSE_VERSION) - v1"
+            print_success "Docker Compose is installed (version: $COMPOSE_VERSION) - v1" >&2
             DOCKER_COMPOSE_CMD="docker-compose"
             compose_available=true
         elif [ $test_exit -eq 2 ]; then
             # distutils error detected
-            echo ""
-            print_warning "docker-compose v1 is installed but incompatible with Python 3.12"
-            echo ""
+            echo "" >&2
+            print_warning "docker-compose v1 is installed but incompatible with Python 3.12" >&2
+            echo "" >&2
+            
+            # Force flush before showing prompt
+            sync 2>/dev/null || true
+            
             if confirm_action "Do you want to install docker-compose-plugin (v2) instead? (Recommended)" "Y"; then
                 # Remove old docker-compose v1
                 if [ "$EUID" -eq 0 ]; then
@@ -505,11 +527,15 @@ check_prerequisites() {
                 fi
                 
                 if install_docker_compose; then
-                    print_success "Docker Compose v2 installed successfully"
+                    print_success "Docker Compose v2 installed successfully" >&2
                     compose_available=true
                 else
-                    print_error "Failed to install docker-compose-plugin"
-                    echo ""
+                    print_error "Failed to install docker-compose-plugin" >&2
+                    echo "" >&2
+                    
+                    # Force flush before showing prompt
+                    sync 2>/dev/null || true
+                    
                     if confirm_action "Install python3-distutils as a workaround for docker-compose v1?" "N"; then
                         if [ "$EUID" -eq 0 ]; then
                             apt-get install -y python3-distutils >/dev/null 2>&1
@@ -524,66 +550,78 @@ check_prerequisites() {
                         fi
                     fi
                 fi
-            elif confirm_action "Install python3-distutils as a workaround?" "N"; then
-                if [ "$EUID" -eq 0 ]; then
-                    apt-get install -y python3-distutils >/dev/null 2>&1
-                else
-                    if command_exists sudo; then
-                        sudo apt-get install -y python3-distutils >/dev/null 2>&1
-                    fi
-                fi
-                if test_docker_compose "docker-compose"; then
-                    local COMPOSE_VERSION=$(docker-compose --version | awk '{print $3}' | sed 's/,//')
-                    print_success "Docker Compose v1 now works with python3-distutils"
-                    DOCKER_COMPOSE_CMD="docker-compose"
-                    compose_available=true
-                fi
             else
-                print_error "Docker Compose is required but not working."
-                print_info "Please install docker-compose-plugin manually:"
-                echo "  apt-get install docker-compose-plugin"
+                # Force flush before showing prompt
+                sync 2>/dev/null || true
+                
+                if confirm_action "Install python3-distutils as a workaround?" "N"; then
+                    if [ "$EUID" -eq 0 ]; then
+                        apt-get install -y python3-distutils >/dev/null 2>&1
+                    else
+                        if command_exists sudo; then
+                            sudo apt-get install -y python3-distutils >/dev/null 2>&1
+                        fi
+                    fi
+                    if test_docker_compose "docker-compose"; then
+                        local COMPOSE_VERSION=$(docker-compose --version | awk '{print $3}' | sed 's/,//')
+                        print_success "Docker Compose v1 now works with python3-distutils" >&2
+                        DOCKER_COMPOSE_CMD="docker-compose"
+                        compose_available=true
+                    fi
+                else
+                print_error "Docker Compose is required but not working." >&2
+                print_info "Please install docker-compose-plugin manually:" >&2
+                echo "  apt-get install docker-compose-plugin" >&2
                 return 1
             fi
         fi
     fi
     
     if [ "$compose_available" = false ]; then
-        print_error "Docker Compose is not installed"
-        echo ""
+        print_error "Docker Compose is not installed" >&2
+        echo "" >&2
+        
+        # Force flush before showing prompt
+        sync 2>/dev/null || true
+        
         if confirm_action "Do you want to install Docker Compose automatically?" "Y"; then
             if install_docker_compose; then
-                print_success "Docker Compose installation completed"
+                print_success "Docker Compose installation completed" >&2
             else
-                print_error "Docker Compose installation failed. Please install manually:"
-                echo "  https://docs.docker.com/compose/install/"
+                print_error "Docker Compose installation failed. Please install manually:" >&2
+                echo "  https://docs.docker.com/compose/install/" >&2
                 return 1
             fi
         else
-            print_error "Docker Compose is required. Please install it first."
+            print_error "Docker Compose is required. Please install it first." >&2
             return 1
         fi
     fi
     
     # Check if Docker is running
     if docker info >/dev/null 2>&1; then
-        print_success "Docker daemon is running"
+        print_success "Docker daemon is running" >&2
     else
-        print_error "Docker daemon is not running"
-        echo ""
+        print_error "Docker daemon is not running" >&2
+        echo "" >&2
+        
+        # Force flush before showing prompt
+        sync 2>/dev/null || true
+        
         if confirm_action "Do you want to start Docker daemon automatically?" "Y"; then
             if start_docker_daemon; then
-                print_success "Docker daemon started"
+                print_success "Docker daemon started" >&2
             else
-                print_error "Failed to start Docker daemon. Please start manually and try again."
+                print_error "Failed to start Docker daemon. Please start manually and try again." >&2
                 return 1
             fi
         else
-            print_error "Docker daemon must be running. Please start it and try again."
+            print_error "Docker daemon must be running. Please start it and try again." >&2
             return 1
         fi
     fi
     
-    echo ""
+    echo "" >&2
     return 0
 }
 
