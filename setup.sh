@@ -9,8 +9,10 @@ set -e
 export SCRIPT_VERSION="v1.8.0"
 export GITHUB_REPO="Shaf2665/AETHER_DASHBOARD"
 
-# Logging
-LOG_PATH="/var/log/aether-dashboard-installer.log"
+# Logging - Use user-writable location
+LOG_PATH="${HOME}/aether-dashboard-installer.log"
+# Fallback to current directory if HOME is not set
+[ -z "$HOME" ] && LOG_PATH="./aether-installer.log"
 BACKUP_FILE=""
 
 # Colors for output
@@ -20,18 +22,24 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
-# Initialize log file
-mkdir -p "$(dirname "$LOG_PATH")" 2>/dev/null || true
-echo -e "\n\n* Aether Dashboard Installer $(date) - Version $SCRIPT_VERSION \n\n" >> "$LOG_PATH"
+# Initialize log file - ensure it's writable
+LOG_DIR="$(dirname "$LOG_PATH")"
+if [ "$LOG_DIR" != "." ] && [ "$LOG_DIR" != "$HOME" ] && [ -n "$LOG_DIR" ]; then
+    mkdir -p "$LOG_DIR" 2>/dev/null || LOG_PATH="${HOME}/aether-installer.log"
+fi
+# Try to create/write to log file, fallback to current directory if it fails
+touch "$LOG_PATH" 2>/dev/null || LOG_PATH="./aether-installer.log"
+echo -e "\n\n* Aether Dashboard Installer $(date) - Version $SCRIPT_VERSION \n\n" >> "$LOG_PATH" 2>/dev/null || true
 
 # Function to log messages
 log_message() {
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1" >> "$LOG_PATH"
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1" >> "$LOG_PATH" 2>/dev/null || true
 }
 
 # Banner
 welcome() {
-    clear
+    # Only clear if we have a TTY (interactive terminal)
+    [ -t 1 ] && clear 2>/dev/null || true
     echo -e "${BLUE}"
     echo "╔══════════════════════════════════════════════════════════╗"
     echo "║      Aether Dashboard - Interactive Setup Wizard       ║"
