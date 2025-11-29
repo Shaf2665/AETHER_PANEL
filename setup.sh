@@ -1211,49 +1211,51 @@ show_menu() {
     # Instead, print a separator line if we have a TTY
     if [ -t 1 ]; then
         # Print separator instead of clearing screen
-        echo ""
-        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-        echo ""
+        echo "" >&2
+        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" >&2
+        echo "" >&2
     fi
     
-    # Force immediate output - use explicit redirection
-    echo -e "${BLUE}" 1>&1
-    echo "╔══════════════════════════════════════════════════════════╗" 1>&1
-    echo "║      Aether Dashboard - Setup Wizard                    ║" 1>&1
-    echo "║                    Version $SCRIPT_VERSION                    ║" 1>&1
-    echo "╚══════════════════════════════════════════════════════════╝" 1>&1
-    echo -e "${NC}" 1>&1
-    echo "" 1>&1
-    print_info "Welcome to Aether Dashboard installation!" 1>&1
-    echo "" 1>&1
+    # Output menu to stderr so it's not captured by command substitution
+    # Only the action choice will go to stdout
+    echo -e "${BLUE}" >&2
+    echo "╔══════════════════════════════════════════════════════════╗" >&2
+    echo "║      Aether Dashboard - Setup Wizard                    ║" >&2
+    echo "║                    Version $SCRIPT_VERSION                    ║" >&2
+    echo "╚══════════════════════════════════════════════════════════╝" >&2
+    echo -e "${NC}" >&2
+    echo "" >&2
+    print_info "Welcome to Aether Dashboard installation!" >&2
+    echo "" >&2
     
     # Force flush output immediately
     sync 2>/dev/null || true
     
     # Check if we have an interactive terminal
     if [ ! -t 0 ]; then
-        print_error "This script requires an interactive terminal" 1>&1
+        print_error "This script requires an interactive terminal" >&2
         exit 1
     fi
     
-    echo "What would you like to do?" 1>&1
-    echo "" 1>&1
-    echo -e "  [${GREEN}1${NC}] Install Prerequisites Only (Docker & Docker Compose)" 1>&1
-    echo -e "  [${GREEN}2${NC}] Full Installation (Recommended)" 1>&1
-    echo -e "  [${GREEN}3${NC}] Configuration Only (Create .env file)" 1>&1
-    echo -e "  [${GREEN}4${NC}] Build & Start Services" 1>&1
-    echo -e "  [${GREEN}5${NC}] Run Database Migrations" 1>&1
-    echo -e "  [${GREEN}6${NC}] Verify Installation" 1>&1
-    echo -e "  [${GREEN}7${NC}] Exit" 1>&1
-    echo "" 1>&1
+    echo "What would you like to do?" >&2
+    echo "" >&2
+    echo -e "  [${GREEN}1${NC}] Install Prerequisites Only (Docker & Docker Compose)" >&2
+    echo -e "  [${GREEN}2${NC}] Full Installation (Recommended)" >&2
+    echo -e "  [${GREEN}3${NC}] Configuration Only (Create .env file)" >&2
+    echo -e "  [${GREEN}4${NC}] Build & Start Services" >&2
+    echo -e "  [${GREEN}5${NC}] Run Database Migrations" >&2
+    echo -e "  [${GREEN}6${NC}] Verify Installation" >&2
+    echo -e "  [${GREEN}7${NC}] Exit" >&2
+    echo "" >&2
     
     # Force output flush before reading
     sync 2>/dev/null || true
-    exec >&1 2>&2
     
     # Use explicit prompt with -p flag for better compatibility
+    # Read from terminal directly, output prompt to stderr
     read -r -p "Enter your choice [1-7]: " choice </dev/tty 2>/dev/null || read -r -p "Enter your choice [1-7]: " choice
     
+    # Output choice to stdout (for command substitution) and error messages to stderr
     case $choice in
         1) echo "prerequisites" ;;
         2) echo "full" ;;
@@ -1263,7 +1265,7 @@ show_menu() {
         6) echo "verify" ;;
         7) echo "exit" ;;
         *)
-            print_error "Invalid choice"
+            print_error "Invalid choice" >&2
             return 1
             ;;
     esac
@@ -1274,14 +1276,15 @@ show_menu() {
 # ============================================================================
 
 main() {
-    # Force output immediately
-    echo "" >&1
+    # Force output immediately to stderr (user-facing output)
+    echo "" >&2
     sync 2>/dev/null || true
     
+    # Capture only the action choice from stdout
     local action=$(show_menu)
     
     if [ -z "$action" ]; then
-        print_error "Invalid selection" >&1
+        print_error "Invalid selection" >&2
         exit 1
     fi
     
@@ -1323,7 +1326,7 @@ main() {
             exit 0
             ;;
         *)
-            print_error "Unknown action: $action"
+            print_error "Unknown action: $action" >&2
             exit 1
             ;;
     esac
