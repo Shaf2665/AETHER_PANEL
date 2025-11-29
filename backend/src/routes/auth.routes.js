@@ -54,6 +54,7 @@ router.post(
           id: user.id,
           username: user.username,
           email: user.email,
+          role: user.role || 'user',
           coins: user.coins,
         },
       });
@@ -103,6 +104,7 @@ router.post(
           id: user.id,
           username: user.username,
           email: user.email,
+          role: user.role || 'user',
           coins: user.coins,
         },
       });
@@ -120,6 +122,7 @@ router.get('/me', authenticate, async (req, res, next) => {
       id: user.id,
       username: user.username,
       email: user.email,
+      role: user.role || 'user',
       discordId: user.discord_id,
       discordUsername: user.discord_username,
       coins: user.coins,

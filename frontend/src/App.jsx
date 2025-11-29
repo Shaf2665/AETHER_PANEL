@@ -11,6 +11,7 @@ import Store from './pages/Store';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import AuthCallback from './pages/AuthCallback';
+import Admin from './pages/Admin';
 
 // Components
 import Navbar from './components/Layout/Navbar';
@@ -44,6 +45,28 @@ function PrivateRoute({ children }) {
   return user ? children : <Navigate to="/login" />;
 }
 
+function AdminRoute({ children }) {
+  const { user, loading } = useAuth();
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return <Navigate to="/login" />;
+  }
+
+  if (user.role !== 'admin') {
+    return <Navigate to="/" />;
+  }
+
+  return children;
+}
+
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
@@ -67,6 +90,14 @@ function App() {
                           <Route path="/servers" element={<Servers />} />
                           <Route path="/earn" element={<EarnCoins />} />
                           <Route path="/store" element={<Store />} />
+                          <Route
+                            path="/admin"
+                            element={
+                              <AdminRoute>
+                                <Admin />
+                              </AdminRoute>
+                            }
+                          />
                         </Routes>
                       </main>
                     </div>

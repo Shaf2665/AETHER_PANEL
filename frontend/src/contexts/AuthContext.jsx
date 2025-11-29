@@ -62,8 +62,10 @@ export const AuthProvider = ({ children }) => {
     window.location.href = '/login';
   };
 
+  const isAdmin = user?.role === 'admin';
+
   return (
-    <AuthContext.Provider value={{ user, loading, login, register, logout, fetchUser }}>
+    <AuthContext.Provider value={{ user, loading, login, register, logout, fetchUser, isAdmin }}>
       {children}
     </AuthContext.Provider>
   );

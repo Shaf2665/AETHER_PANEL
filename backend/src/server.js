@@ -19,6 +19,7 @@ const coinRoutes = require('./routes/coin.routes');
 const serverRoutes = require('./routes/server.routes');
 const revenueRoutes = require('./routes/revenue.routes');
 const resourceRoutes = require('./routes/resource.routes');
+const adminRoutes = require('./routes/admin.routes');
 
 // Import middleware
 const { errorHandler } = require('./middleware/error.middleware');
@@ -94,6 +95,7 @@ app.use('/api/coins', coinRoutes);
 app.use('/api/servers', serverRoutes);
 app.use('/api/revenue', revenueRoutes);
 app.use('/api/resources', resourceRoutes);
+app.use('/api/admin', adminRoutes);
 
 // Serve static files from React app in production
 if (isProduction) {

@@ -1,15 +1,18 @@
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
+import { useAuth } from '../../contexts/AuthContext';
 import {
   HomeIcon,
   ServerIcon,
   CurrencyDollarIcon,
   ShoppingBagIcon,
   SparklesIcon,
+  ShieldCheckIcon,
 } from '@heroicons/react/24/outline';
 
 const Sidebar = () => {
   const location = useLocation();
+  const { isAdmin } = useAuth();
 
   const navigation = [
     { name: 'Dashboard', href: '/', icon: HomeIcon, gradient: 'from-blue-500 to-cyan-500' },
@@ -17,6 +20,16 @@ const Sidebar = () => {
     { name: 'Earn Coins', href: '/earn', icon: CurrencyDollarIcon, gradient: 'from-emerald-500 to-teal-500' },
     { name: 'Store', href: '/store', icon: ShoppingBagIcon, gradient: 'from-amber-500 to-orange-500' },
   ];
+
+  // Add admin panel link if user is admin
+  if (isAdmin) {
+    navigation.push({
+      name: 'Admin Panel',
+      href: '/admin',
+      icon: ShieldCheckIcon,
+      gradient: 'from-red-500 to-rose-500',
+    });
+  }
 
   return (
     <div className="w-64 bg-gradient-to-b from-gray-900 via-gray-800 to-gray-900 min-h-screen shadow-2xl border-r border-gray-700/50">

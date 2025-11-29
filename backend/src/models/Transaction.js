@@ -33,6 +33,69 @@ class Transaction {
     const result = await pool.query(query, [userId, type]);
     return parseFloat(result.rows[0].total);
   }
+
+  static async findAll(page = 1, limit = 50, userId = null, type = null, startDate = null, endDate = null) {
+    const offset = (page - 1) * limit;
+    let query = `
+      SELECT t.*, u.username, u.email 
+      FROM transactions t 
+      LEFT JOIN users u ON t.user_id = u.id
+    `;
+    const conditions = [];
+    const values = [];
+    let paramCount = 1;
+
+    if (userId) {
+      conditions.push(`t.user_id = $${paramCount}`);
+      values.push(userId);
+      paramCount++;
+    }
+
+    if (type) {
+      conditions.push(`t.type = $${paramCount}`);
+      values.push(type);
+      paramCount++;
+    }
+
+    if (startDate) {
+      conditions.push(`t.created_at >= $${paramCount}`);
+      values.push(startDate);
+      paramCount++;
+    }
+
+    if (endDate) {
+      conditions.push(`t.created_at <= $${paramCount}`);
+      values.push(endDate);
+      paramCount++;
+    }
+
+    if (conditions.length > 0) {
+      query += ' WHERE ' + conditions.join(' AND ');
+    }
+
+    query += ` ORDER BY t.created_at DESC LIMIT $${paramCount} OFFSET $${paramCount + 1}`;
+    values.push(limit, offset);
+
+    const result = await pool.query(query, values);
+    
+    // Get total count
+    let countQuery = 'SELECT COUNT(*) FROM transactions t';
+    if (conditions.length > 0) {
+      countQuery += ' WHERE ' + conditions.join(' AND ');
+    }
+    const countResult = await pool.query(countQuery, values.slice(0, -2));
+    const total = parseInt(countResult.rows[0].count);
+
+    return {
+      transactions: result.rows,
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit)
+      }
+    };
+  }
 }
 
 module.exports = Transaction;
