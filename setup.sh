@@ -497,19 +497,128 @@ if [ "$SKIP_ENV_CREATION" != "true" ]; then
     
     VPS_IP=$(get_vps_ip)
     if [ -n "$VPS_IP" ]; then
-        DETECTED_URL="http://$VPS_IP:$PORT"
         print_info "Detected VPS IP: $VPS_IP"
-        read -p "Frontend URL (default: $DETECTED_URL): " FRONTEND_URL
-        FRONTEND_URL=${FRONTEND_URL:-$DETECTED_URL}
+        echo ""
+        
+        # Ask if user wants to use a subdomain
+        read -p "Do you want to use a subdomain (e.g., dashboard.yourdomain.com)? (y/N): " use_subdomain
+        if [[ $use_subdomain =~ ^[Yy]$ ]]; then
+            echo ""
+            print_info "Subdomain Setup with Cloudflare"
+            echo "────────────────────────────────────────────────────────────────────────────"
+            echo ""
+            read -p "Enter your subdomain (e.g., dashboard.hosting.com): " SUBDOMAIN
+            while [ -z "$SUBDOMAIN" ]; do
+                print_error "Subdomain cannot be empty"
+                read -p "Enter your subdomain (e.g., dashboard.hosting.com): " SUBDOMAIN
+            done
+            
+            # Validate subdomain format (basic validation)
+            if [[ ! $SUBDOMAIN =~ ^[a-zA-Z0-9][a-zA-Z0-9\.-]*[a-zA-Z0-9]$ ]] || [[ $SUBDOMAIN =~ \.\. ]] || [[ ! $SUBDOMAIN =~ \. ]]; then
+                print_error "Invalid subdomain format. Please use format like: dashboard.hosting.com"
+                read -p "Enter your subdomain: " SUBDOMAIN
+            fi
+            
+            # Extract subdomain name and root domain
+            SUBDOMAIN_NAME="${SUBDOMAIN%%.*}"  # e.g., "dashboard" from "dashboard.hosting.com"
+            ROOT_DOMAIN="${SUBDOMAIN#*.}"      # e.g., "hosting.com" from "dashboard.hosting.com"
+            
+            echo ""
+            print_warning "IMPORTANT: DNS Configuration Required"
+            echo "────────────────────────────────────────────────────────────────────────────"
+            echo ""
+            echo "You need to configure a DNS A record in Cloudflare:"
+            echo ""
+            echo -e "  ${GREEN}Record Type:${NC}  A"
+            echo -e "  ${GREEN}Name:${NC}         $SUBDOMAIN_NAME"
+            echo -e "  ${GREEN}Content:${NC}       $VPS_IP"
+            echo -e "  ${GREEN}Proxy:${NC}         Proxied (orange cloud) - Recommended for HTTPS"
+            echo ""
+            echo "Steps to configure in Cloudflare:"
+            echo "  1. Log in to your Cloudflare dashboard"
+            echo "  2. Select your domain ($ROOT_DOMAIN)"
+            echo "  3. Go to DNS > Records"
+            echo "  4. Click 'Add record'"
+            echo "  5. Set Type: A"
+            echo "  6. Set Name: $SUBDOMAIN_NAME"
+            echo "  7. Set IPv4 address: $VPS_IP"
+            echo "  8. Enable Proxy (orange cloud) for HTTPS support"
+            echo "  9. Click 'Save'"
+            echo ""
+            echo -e "${YELLOW}Note:${NC} DNS propagation can take a few minutes to 24 hours, but usually happens within 5-10 minutes."
+            echo ""
+            read -p "Press Enter once you've configured the DNS record in Cloudflare..."
+            
+            # Ask if they want to use HTTPS
+            read -p "Do you want to use HTTPS (requires Cloudflare proxy enabled)? (Y/n): " use_https
+            if [[ ! $use_https =~ ^[Nn]$ ]]; then
+                FRONTEND_URL="https://$SUBDOMAIN"
+                print_success "Frontend URL set to: $FRONTEND_URL (HTTPS)"
+            else
+                FRONTEND_URL="http://$SUBDOMAIN"
+                print_success "Frontend URL set to: $FRONTEND_URL (HTTP)"
+            fi
+        else
+            # Use IP address
+            DETECTED_URL="http://$VPS_IP:$PORT"
+            read -p "Frontend URL (default: $DETECTED_URL): " FRONTEND_URL
+            FRONTEND_URL=${FRONTEND_URL:-$DETECTED_URL}
+            print_success "Frontend URL set to: $FRONTEND_URL"
+        fi
     else
         print_warning "Could not automatically detect VPS IP"
-        read -p "Enter your Frontend URL (e.g., http://your-domain.com or http://YOUR_IP:$PORT): " FRONTEND_URL
-        while [ -z "$FRONTEND_URL" ] || ! validate_url "$FRONTEND_URL"; do
-            print_error "Please enter a valid URL (must start with http:// or https://)"
-            read -p "Enter your Frontend URL: " FRONTEND_URL
-        done
+        echo ""
+        read -p "Do you want to use a subdomain? (y/N): " use_subdomain
+        if [[ $use_subdomain =~ ^[Yy]$ ]]; then
+            read -p "Enter your subdomain (e.g., dashboard.hosting.com): " SUBDOMAIN
+            while [ -z "$SUBDOMAIN" ]; do
+                print_error "Subdomain cannot be empty"
+                read -p "Enter your subdomain: " SUBDOMAIN
+            done
+            
+            # Extract subdomain name and root domain
+            SUBDOMAIN_NAME="${SUBDOMAIN%%.*}"
+            ROOT_DOMAIN="${SUBDOMAIN#*.}"
+            
+            echo ""
+            print_warning "IMPORTANT: DNS Configuration Required"
+            echo "────────────────────────────────────────────────────────────────────────────"
+            echo ""
+            echo "You need to configure a DNS A record in Cloudflare:"
+            echo ""
+            echo -e "  ${GREEN}Record Type:${NC}  A"
+            echo -e "  ${GREEN}Name:${NC}         $SUBDOMAIN_NAME"
+            echo -e "  ${GREEN}Content:${NC}       [Your VPS IP Address]"
+            echo -e "  ${GREEN}Proxy:${NC}         Proxied (orange cloud) - Recommended for HTTPS"
+            echo ""
+            echo "Steps to configure in Cloudflare:"
+            echo "  1. Log in to your Cloudflare dashboard"
+            echo "  2. Select your domain ($ROOT_DOMAIN)"
+            echo "  3. Go to DNS > Records"
+            echo "  4. Click 'Add record'"
+            echo "  5. Set Type: A"
+            echo "  6. Set Name: $SUBDOMAIN_NAME"
+            echo "  7. Set IPv4 address: [Your VPS IP]"
+            echo "  8. Enable Proxy (orange cloud) for HTTPS support"
+            echo "  9. Click 'Save'"
+            echo ""
+            read -p "Enter your VPS IP address: " VPS_IP
+            read -p "Do you want to use HTTPS? (Y/n): " use_https
+            if [[ ! $use_https =~ ^[Nn]$ ]]; then
+                FRONTEND_URL="https://$SUBDOMAIN"
+            else
+                FRONTEND_URL="http://$SUBDOMAIN"
+            fi
+            print_success "Frontend URL set to: $FRONTEND_URL"
+        else
+            read -p "Enter your Frontend URL (e.g., http://your-domain.com or http://YOUR_IP:$PORT): " FRONTEND_URL
+            while [ -z "$FRONTEND_URL" ] || ! validate_url "$FRONTEND_URL"; do
+                print_error "Please enter a valid URL (must start with http:// or https://)"
+                read -p "Enter your Frontend URL: " FRONTEND_URL
+            done
+            print_success "Frontend URL set to: $FRONTEND_URL"
+        fi
     fi
-    print_success "Frontend URL set to: $FRONTEND_URL"
     echo ""
 
     # JWT Secret
@@ -785,14 +894,23 @@ echo ""
 
 # Get VPS IP for display
 VPS_IP=$(get_vps_ip)
-if [ -n "$VPS_IP" ]; then
-    echo -e "  ${GREEN}Local Access:${NC}    http://localhost:$PORT"
-    echo -e "  ${GREEN}External Access:${NC} http://$VPS_IP:$PORT"
+if [ -n "$FRONTEND_URL" ]; then
+    echo -e "  ${GREEN}Dashboard URL:${NC}   $FRONTEND_URL"
+    # If using IP address, also show local access
+    if [[ $FRONTEND_URL =~ ^https?://[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+ ]]; then
+        echo -e "  ${GREEN}Local Access:${NC}    http://localhost:$PORT"
+    fi
     echo -e "  ${GREEN}Health Check:${NC}    http://localhost:$PORT/health"
 else
-    echo -e "  ${GREEN}Local Access:${NC}    http://localhost:$PORT"
-    echo -e "  ${GREEN}Health Check:${NC}    http://localhost:$PORT/health"
-    print_warning "Could not detect VPS IP. Use your server's IP address to access externally."
+    if [ -n "$VPS_IP" ]; then
+        echo -e "  ${GREEN}Local Access:${NC}    http://localhost:$PORT"
+        echo -e "  ${GREEN}External Access:${NC} http://$VPS_IP:$PORT"
+        echo -e "  ${GREEN}Health Check:${NC}    http://localhost:$PORT/health"
+    else
+        echo -e "  ${GREEN}Local Access:${NC}    http://localhost:$PORT"
+        echo -e "  ${GREEN}Health Check:${NC}    http://localhost:$PORT/health"
+        print_warning "Could not detect VPS IP. Use your server's IP address to access externally."
+    fi
 fi
 echo ""
 echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
@@ -808,10 +926,17 @@ echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━�
 echo -e "${YELLOW}Next Steps:${NC}"
 echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
 echo ""
-if [ -n "$VPS_IP" ]; then
-    echo "  1. Open http://$VPS_IP:$PORT in your browser (or http://localhost:$PORT locally)"
+if [ -n "$FRONTEND_URL" ]; then
+    echo "  1. Open $FRONTEND_URL in your browser"
+    if [[ $FRONTEND_URL =~ ^https?://[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+ ]]; then
+        echo "     (or http://localhost:$PORT locally)"
+    fi
 else
-    echo "  1. Open http://localhost:$PORT in your browser"
+    if [ -n "$VPS_IP" ]; then
+        echo "  1. Open http://$VPS_IP:$PORT in your browser (or http://localhost:$PORT locally)"
+    else
+        echo "  1. Open http://localhost:$PORT in your browser"
+    fi
 fi
 echo "  2. Register your first admin account"
 echo "  3. Configure your Pterodactyl Panel integration"
