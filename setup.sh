@@ -4,16 +4,9 @@
 # This script provides an easy way to install and configure Aether Dashboard
 
 # Force immediate output flushing - critical for preventing hangs
-# Ensure stdout and stderr are properly connected and unbuffered
-# Use simple redirection that works in all environments
-exec >&1 2>&2
-
-# Try to disable output buffering if possible (non-blocking)
-# Check for stdbuf without using command_exists (defined later)
-if [ -t 1 ] && command -v stdbuf >/dev/null 2>&1; then
-    # Use stdbuf if available, but don't fail if it doesn't work
-    exec > >(stdbuf -oL -eL cat 2>/dev/null) 2>&1 2>/dev/null || true
-fi
+# Ensure stdout and stderr are properly connected
+# Use simple approach that works in all environments - no process substitution
+# Process substitution can cause hangs, so we avoid it
 
 # Script version
 SCRIPT_VERSION="v2.0.0"
