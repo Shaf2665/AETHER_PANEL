@@ -1126,6 +1126,7 @@ EOF
 
     print_success ".env file created successfully"
     echo ""
+    fi
 }
 
 # Function to execute build and start services
