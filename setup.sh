@@ -9,12 +9,7 @@ set -e
 export SCRIPT_VERSION="v1.8.0"
 export GITHUB_REPO="Shaf2665/AETHER_DASHBOARD"
 
-# Logging - Use user-writable location
-LOG_PATH="${HOME}/aether-dashboard-installer.log"
-# Fallback to current directory if HOME is not set
-[ -z "$HOME" ] && LOG_PATH="./aether-installer.log"
 BACKUP_FILE=""
-LOG_INITIALIZED=false
 
 # Colors for output
 RED='\033[0;31m'
@@ -22,35 +17,6 @@ GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
-
-# Function to initialize log file (lazy initialization)
-init_log_file() {
-    if [ "$LOG_INITIALIZED" = "true" ]; then
-        return 0
-    fi
-    
-    # Initialize log file - ensure it's writable
-    LOG_DIR="$(dirname "$LOG_PATH" 2>/dev/null)"
-    if [ "$LOG_DIR" != "." ] && [ "$LOG_DIR" != "$HOME" ] && [ -n "$LOG_DIR" ]; then
-        mkdir -p "$LOG_DIR" 2>/dev/null || LOG_PATH="${HOME}/aether-installer.log"
-    fi
-    # Try to create/write to log file, fallback to current directory if it fails
-    if ! touch "$LOG_PATH" 2>/dev/null; then
-        LOG_PATH="./aether-installer.log"
-        touch "$LOG_PATH" 2>/dev/null || return 1
-    fi
-    # Write initial log entry
-    echo -e "\n\n* Aether Dashboard Installer $(date) - Version $SCRIPT_VERSION \n\n" >> "$LOG_PATH" 2>/dev/null || return 1
-    LOG_INITIALIZED=true
-    return 0
-}
-
-# Function to log messages
-log_message() {
-    # Initialize log file on first use (lazy initialization)
-    init_log_file 2>/dev/null || return 0
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1" >> "$LOG_PATH" 2>/dev/null || true
-}
 
 # Banner
 welcome() {
@@ -67,35 +33,29 @@ welcome() {
     exec >&1
     print_info "Welcome to Aether Dashboard installation!"
     echo ""
-    log_message "Installation started"
 }
 
 # Function to print colored messages
 print_success() {
     echo -e "${GREEN}✓${NC} $1"
-    log_message "SUCCESS: $1"
 }
 
 print_error() {
     echo -e "${RED}✗${NC} $1"
-    log_message "ERROR: $1"
 }
 
 print_warning() {
     echo -e "${YELLOW}⚠${NC} $1"
-    log_message "WARNING: $1"
 }
 
 print_info() {
     echo -e "${BLUE}ℹ${NC} $1"
-    log_message "INFO: $1"
 }
 
 output() {
     echo -e "$1"
-    # Flush stdout before logging
+    # Flush stdout
     exec >&1
-    log_message "$1"
 }
 
 # Function to check if command exists
@@ -157,7 +117,7 @@ retry_command() {
     local attempt=1
     
     while [ $attempt -le $max_attempts ]; do
-        if "${command[@]}" >> "$LOG_PATH" 2>&1; then
+        if "${command[@]}" >/dev/null 2>&1; then
             return 0
         fi
         if [ $attempt -lt $max_attempts ]; then
