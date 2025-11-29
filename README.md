@@ -74,6 +74,7 @@ The easiest way to install Aether Dashboard is using our interactive setup wizar
 ```bash
 git clone https://github.com/Shaf2665/AETHER_DASHBOARD.git
 cd AETHER_DASHBOARD
+chmod +x setup.sh
 ./setup.sh
 ```
 
