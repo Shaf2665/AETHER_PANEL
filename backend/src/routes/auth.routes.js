@@ -38,8 +38,18 @@ router.post(
       // Hash password
       const password_hash = await bcrypt.hash(password, 10);
 
-      // Create user
-      const user = await User.create({ username, email, password_hash });
+      // Check if email matches admin email
+      const adminEmail = process.env.ADMIN_EMAIL?.toLowerCase().trim();
+      const userEmail = email.toLowerCase().trim();
+      const isAdmin = adminEmail && userEmail === adminEmail;
+
+      // Create user with admin role if email matches
+      const user = await User.create({ 
+        username, 
+        email, 
+        password_hash,
+        role: isAdmin ? 'admin' : undefined
+      });
 
       // Generate token
       const token = jwt.sign(
@@ -190,10 +200,15 @@ if (discordConfig.enabled) {
 
       const discordUser = userResponse.data;
       const discordId = discordUser.id;
+      const discordEmail = discordUser.email?.toLowerCase().trim(); // Get email from Discord
       const discordUsername = `${discordUser.username}${discordUser.discriminator !== '0' ? `#${discordUser.discriminator}` : ''}`;
       const discordAvatar = discordUser.avatar
         ? `https://cdn.discordapp.com/avatars/${discordId}/${discordUser.avatar}.png`
         : null;
+
+      // Check if email matches admin email
+      const adminEmail = process.env.ADMIN_EMAIL?.toLowerCase().trim();
+      const isAdmin = adminEmail && discordEmail && discordEmail === adminEmail;
 
       // Check if user exists with this Discord ID
       let user = await User.findByDiscordId(discordId);
@@ -201,6 +216,23 @@ if (discordConfig.enabled) {
       if (user) {
         // Update Discord info if changed
         await User.updateDiscordInfo(user.id, discordUsername, discordAvatar);
+        
+        // Update email if available and user doesn't have one, or if it changed
+        if (discordEmail) {
+          if (!user.email || user.email.toLowerCase() !== discordEmail) {
+            await User.update(user.id, { email: discordEmail });
+            // Refresh user data
+            user = await User.findById(user.id);
+          }
+        }
+        
+        // Update role if email matches admin email
+        if (isAdmin && user.role !== 'admin') {
+          await User.updateRole(user.id, 'admin');
+          // Refresh user data
+          user = await User.findById(user.id);
+        }
+        
         await User.updateLastActive(user.id);
       } else {
         // Create new user with Discord
@@ -217,9 +249,11 @@ if (discordConfig.enabled) {
 
         user = await User.create({
           username: finalUsername,
+          email: discordEmail, // Store email from Discord
           discord_id: discordId,
           discord_username: discordUsername,
           discord_avatar: discordAvatar,
+          role: isAdmin ? 'admin' : undefined
         });
       }
 

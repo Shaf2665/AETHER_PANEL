@@ -759,6 +759,9 @@ PORT=$PORT
 # Frontend URL (REQUIRED for CORS and external access)
 FRONTEND_URL=$FRONTEND_URL
 
+# Admin Configuration
+ADMIN_EMAIL=${ADMIN_EMAIL:-}
+
 # JWT Secret (DO NOT SHARE THIS!)
 JWT_SECRET=$JWT_SECRET
 
