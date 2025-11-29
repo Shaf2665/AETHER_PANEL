@@ -1,41 +1,29 @@
 #!/bin/bash
 
-# Aether Dashboard - Interactive Setup Wizard
-# This script guides you through the installation and configuration process
+# Aether Dashboard - User-Friendly Setup Script
+# This script provides an easy way to install and configure Aether Dashboard
 
 set -e
 
 # Script version
-export SCRIPT_VERSION="v1.8.0"
-export GITHUB_REPO="Shaf2665/AETHER_DASHBOARD"
-
-BACKUP_FILE=""
+SCRIPT_VERSION="v2.0.0"
 
 # Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
+CYAN='\033[0;36m'
 NC='\033[0m' # No Color
 
-# Banner
-welcome() {
-    # Only clear if we have a TTY (interactive terminal)
-    [ -t 1 ] && clear 2>/dev/null || true
-    echo -e "${BLUE}"
-    echo "╔══════════════════════════════════════════════════════════╗"
-    echo "║      Aether Dashboard - Interactive Setup Wizard       ║"
-    echo "║                    Version $SCRIPT_VERSION                    ║"
-    echo "╚══════════════════════════════════════════════════════════╝"
-    echo -e "${NC}"
-    echo ""
-    # Ensure output is flushed
-    exec >&1
-    print_info "Welcome to Aether Dashboard installation!"
-    echo ""
-}
+# Global variables
+DOCKER_COMPOSE_CMD=""
+BACKUP_FILE=""
 
-# Function to print colored messages
+# ============================================================================
+# Helper Functions
+# ============================================================================
+
 print_success() {
     echo -e "${GREEN}✓${NC} $1"
 }
@@ -52,23 +40,18 @@ print_info() {
     echo -e "${BLUE}ℹ${NC} $1"
 }
 
-output() {
-    echo -e "$1"
-    # Flush stdout
-    exec >&1
+print_header() {
+    echo -e "${CYAN}$1${NC}"
 }
 
-# Function to check if command exists
 command_exists() {
     command -v "$1" >/dev/null 2>&1
 }
 
-# Function to generate random string
 generate_secret() {
     openssl rand -base64 32 | tr -d "=+/" | cut -c1-32
 }
 
-# Function to validate URL
 validate_url() {
     if [[ $1 =~ ^https?:// ]]; then
         return 0
@@ -77,7 +60,6 @@ validate_url() {
     fi
 }
 
-# Function to validate port
 validate_port() {
     if [[ $1 =~ ^[0-9]+$ ]] && [ "$1" -ge 1 ] && [ "$1" -le 65535 ]; then
         return 0
@@ -86,257 +68,25 @@ validate_port() {
     fi
 }
 
-# Function to flush output
-flush_output() {
-    exec >&1
-    sync 2>/dev/null || true
-}
-
-# Function to show progress indicator
-show_progress() {
-    local pid=$1
-    local message=$2
-    local spin='-\|/'
-    local i=0
-    
-    echo -n "$message "
-    while kill -0 $pid 2>/dev/null; do
-        i=$(( (i+1) %4 ))
-        printf "\r$message ${spin:$i:1}"
-        sleep 0.1
-    done
-    printf "\r$message ✓\n"
-}
-
-# Function to retry command with exponential backoff
-retry_command() {
-    local max_attempts=$1
-    local delay=$2
-    shift 2
-    local command=("$@")
-    local attempt=1
-    
-    while [ $attempt -le $max_attempts ]; do
-        if "${command[@]}" >/dev/null 2>&1; then
-            return 0
-        fi
-        if [ $attempt -lt $max_attempts ]; then
-            print_warning "Attempt $attempt failed. Retrying in ${delay}s..."
-            sleep $delay
-            delay=$((delay * 2))  # Exponential backoff
-        fi
-        attempt=$((attempt + 1))
-    done
-    
-    print_error "Command failed after $max_attempts attempts"
-    return 1
-}
-
-# Function to wait for service health with retries
-wait_for_health() {
-    local url=$1
-    local max_attempts=30
-    local attempt=1
-    local delay=2
-    
-    print_info "Waiting for service to be healthy..."
-    while [ $attempt -le $max_attempts ]; do
-        if curl -f -s "$url" >/dev/null 2>&1; then
-            print_success "Service is healthy!"
-            return 0
-        fi
-        if [ $attempt -lt $max_attempts ]; then
-            printf "\rWaiting... (attempt $attempt/$max_attempts) "
-            sleep $delay
-            if [ $delay -lt 10 ]; then
-                delay=$((delay + 1))  # Exponential backoff up to 10s
-            fi
-        fi
-        attempt=$((attempt + 1))
-    done
-    
-    printf "\r"
-    print_error "Service health check failed after $max_attempts attempts"
-    return 1
-}
-
-# Function to confirm action
-confirm_action() {
-    local message=$1
-    local default=${2:-"N"}
-    
-    if [ "$default" = "Y" ]; then
-        prompt="(Y/n)"
-    else
-        prompt="(y/N)"
-    fi
-    
-    read -p "$message $prompt: " response
-    response=${response:-$default}
-    
-    if [[ $response =~ ^[Yy]$ ]]; then
-        return 0
-    else
-        return 1
-    fi
-}
-
-# Function to create backup
-create_backup() {
-    if [ -f .env ]; then
-        BACKUP_FILE=".env.backup.$(date +%Y%m%d_%H%M%S)"
-        cp .env "$BACKUP_FILE" 2>/dev/null && print_success "Configuration backed up to $BACKUP_FILE" || print_warning "Could not create backup"
-    fi
-}
-
-# Function for pre-flight checks
-preflight_checks() {
-    print_info "Running pre-flight checks..."
-    local errors=0
-    
-    # Check disk space (need at least 5GB)
-    if command_exists df; then
-        available_space=$(df -BG . 2>/dev/null | awk 'NR==2 {print $4}' | sed 's/G//' || echo "0")
-        if [ -n "$available_space" ] && [ "$available_space" -lt 5 ] 2>/dev/null; then
-            print_error "Insufficient disk space. Need at least 5GB, have ${available_space}GB"
-            errors=$((errors + 1))
-        else
-            print_success "Disk space check passed (${available_space}GB available)"
-        fi
-    fi
-    
-    # Check memory (warn if less than 2GB)
-    if command_exists free; then
-        total_mem=$(free -g 2>/dev/null | awk '/^Mem:/{print $2}' || echo "0")
-        if [ -n "$total_mem" ] && [ "$total_mem" -lt 2 ] 2>/dev/null; then
-            print_warning "Low memory detected (${total_mem}GB). Recommended: 2GB+"
-        else
-            print_success "Memory check passed (${total_mem}GB available)"
-        fi
-    fi
-    
-    # Check if ports are available (if PORT is set)
-    if [ -n "$PORT" ]; then
-        if command_exists netstat; then
-            if netstat -tuln 2>/dev/null | grep -q ":$PORT "; then
-                print_error "Port $PORT is already in use"
-                errors=$((errors + 1))
-            else
-                print_success "Port $PORT is available"
-            fi
-        elif command_exists ss; then
-            if ss -tuln 2>/dev/null | grep -q ":$PORT "; then
-                print_error "Port $PORT is already in use"
-                errors=$((errors + 1))
-            else
-                print_success "Port $PORT is available"
-            fi
-        fi
-    fi
-    
-    if [ $errors -gt 0 ]; then
-        print_error "Pre-flight checks failed. Please fix the errors above."
-        return 1
-    fi
-    
-    print_success "All pre-flight checks passed"
-    return 0
-}
-
-# Function to validate configuration
-validate_configuration() {
-    print_info "Validating configuration..."
-    local errors=0
-    
-    if [ -z "$FRONTEND_URL" ]; then
-        print_error "FRONTEND_URL is required"
-        errors=$((errors + 1))
-    elif ! validate_url "$FRONTEND_URL"; then
-        print_error "FRONTEND_URL must be a valid URL (http:// or https://)"
-        errors=$((errors + 1))
-    fi
-    
-    if [ ${#JWT_SECRET} -lt 32 ]; then
-        print_error "JWT_SECRET must be at least 32 characters"
-        errors=$((errors + 1))
-    fi
-    
-    if [ -z "$DB_PASSWORD" ]; then
-        print_error "Database password is required"
-        errors=$((errors + 1))
-    fi
-    
-    if [ -z "$PTERODACTYL_URL" ]; then
-        print_error "Pterodactyl Panel URL is required"
-        errors=$((errors + 1))
-    elif ! validate_url "$PTERODACTYL_URL"; then
-        print_error "Pterodactyl URL must be a valid URL"
-        errors=$((errors + 1))
-    fi
-    
-    if [ -z "$PTERODACTYL_APPLICATION_API_KEY" ]; then
-        print_error "Pterodactyl Application API Key is required"
-        errors=$((errors + 1))
-    fi
-    
-    if [ $errors -gt 0 ]; then
-        print_error "Configuration validation failed. Please fix the $errors error(s) above."
-        return 1
-    fi
-    
-    print_success "Configuration validation passed"
-    return 0
-}
-
-# Function to check services status
-check_services_status() {
-    print_info "Checking service status..."
-    echo ""
-    
-    services=("aether-dashboard" "aether-postgres" "aether-redis")
-    all_healthy=true
-    
-    for service in "${services[@]}"; do
-        if $DOCKER_COMPOSE_CMD ps 2>/dev/null | grep -q "$service.*Up"; then
-            print_success "$service is running"
-        else
-            print_error "$service is not running"
-            all_healthy=false
-        fi
-    done
-    
-    if [ "$all_healthy" = true ]; then
-        return 0
-    else
-        print_warning "Some services are not running. Check logs: $DOCKER_COMPOSE_CMD logs"
-        return 1
-    fi
-}
-
-# Function to detect OS
 detect_os() {
     if [ -f /etc/os-release ]; then
         . /etc/os-release
-        OS=$ID
-        OS_VERSION=$VERSION_ID
+        echo "$ID"
     elif [ -f /etc/redhat-release ]; then
-        OS="rhel"
-        OS_VERSION=$(cat /etc/redhat-release | sed -E 's/.*release ([0-9]+).*/\1/')
+        echo "rhel"
     elif [ -f /etc/arch-release ]; then
-        OS="arch"
-        OS_VERSION=""
+        echo "arch"
     else
-        OS="unknown"
-        OS_VERSION=""
+        echo "unknown"
     fi
-    echo "$OS"
 }
 
-# Function to get VPS IP address
 get_vps_ip() {
     # Try multiple methods to get the public IP
     if command_exists curl; then
-        IP=$(curl -s https://api.ipify.org 2>/dev/null || curl -s https://ifconfig.me 2>/dev/null || curl -s https://icanhazip.com 2>/dev/null)
+        IP=$(curl -s --max-time 5 https://api.ipify.org 2>/dev/null || \
+             curl -s --max-time 5 https://ifconfig.me 2>/dev/null || \
+             curl -s --max-time 5 https://icanhazip.com 2>/dev/null)
         if [ -n "$IP" ]; then
             echo "$IP"
             return 0
@@ -365,34 +115,59 @@ get_vps_ip() {
     return 1
 }
 
-# Function to install Docker
+confirm_action() {
+    local message=$1
+    local default=${2:-"N"}
+    
+    if [ "$default" = "Y" ]; then
+        prompt="(Y/n)"
+    else
+        prompt="(y/N)"
+    fi
+    
+    read -p "$message $prompt: " response
+    response=${response:-$default}
+    
+    if [[ $response =~ ^[Yy]$ ]]; then
+        return 0
+    else
+        return 1
+    fi
+}
+
+flush_output() {
+    exec >&1
+}
+
+# ============================================================================
+# Prerequisite Installation Functions
+# ============================================================================
+
 install_docker() {
     print_info "Installing Docker..."
     
-    OS=$(detect_os)
+    local OS=$(detect_os)
     
     case $OS in
         ubuntu|debian)
             print_info "Detected Ubuntu/Debian. Installing Docker..."
-            if command_exists curl; then
-                curl -fsSL https://get.docker.com -o get-docker.sh
-                sh get-docker.sh
-                rm -f get-docker.sh
-            else
-                print_error "curl is required but not installed. Please install curl first."
+            if ! command_exists curl; then
+                print_error "curl is required but not installed."
                 return 1
             fi
+            curl -fsSL https://get.docker.com -o /tmp/get-docker.sh
+            sh /tmp/get-docker.sh
+            rm -f /tmp/get-docker.sh
             ;;
         centos|rhel|fedora)
             print_info "Detected CentOS/RHEL/Fedora. Installing Docker..."
-            if command_exists curl; then
-                curl -fsSL https://get.docker.com -o get-docker.sh
-                sh get-docker.sh
-                rm -f get-docker.sh
-            else
-                print_error "curl is required but not installed. Please install curl first."
+            if ! command_exists curl; then
+                print_error "curl is required but not installed."
                 return 1
             fi
+            curl -fsSL https://get.docker.com -o /tmp/get-docker.sh
+            sh /tmp/get-docker.sh
+            rm -f /tmp/get-docker.sh
             ;;
         arch)
             print_info "Detected Arch Linux. Installing Docker..."
@@ -413,15 +188,15 @@ install_docker() {
     # Start and enable Docker service
     if command_exists systemctl; then
         print_info "Starting Docker service..."
-        systemctl start docker
-        systemctl enable docker
+        systemctl start docker 2>/dev/null || true
+        systemctl enable docker 2>/dev/null || true
     fi
     
     # Add current user to docker group (if not root)
     if [ "$EUID" -ne 0 ]; then
         print_info "Adding current user to docker group..."
         if command_exists usermod; then
-            usermod -aG docker "$USER"
+            usermod -aG docker "$USER" 2>/dev/null || true
             print_warning "You may need to log out and log back in for group changes to take effect."
         fi
     fi
@@ -431,7 +206,7 @@ install_docker() {
     
     # Verify installation
     if docker --version >/dev/null 2>&1; then
-        DOCKER_VERSION=$(docker --version | awk '{print $3}' | sed 's/,//')
+        local DOCKER_VERSION=$(docker --version | awk '{print $3}' | sed 's/,//')
         print_success "Docker installed successfully (version: $DOCKER_VERSION)"
         return 0
     else
@@ -440,11 +215,10 @@ install_docker() {
     fi
 }
 
-# Function to install Docker Compose
 install_docker_compose() {
     print_info "Installing Docker Compose..."
     
-    OS=$(detect_os)
+    local OS=$(detect_os)
     
     case $OS in
         ubuntu|debian)
@@ -465,10 +239,12 @@ install_docker_compose() {
         centos|rhel|fedora)
             print_info "Installing Docker Compose plugin..."
             if [ "$EUID" -eq 0 ]; then
-                yum install -y docker-compose-plugin >/dev/null 2>&1 || dnf install -y docker-compose-plugin >/dev/null 2>&1
+                yum install -y docker-compose-plugin >/dev/null 2>&1 || \
+                dnf install -y docker-compose-plugin >/dev/null 2>&1
             else
                 if command_exists sudo; then
-                    sudo yum install -y docker-compose-plugin >/dev/null 2>&1 || sudo dnf install -y docker-compose-plugin >/dev/null 2>&1
+                    sudo yum install -y docker-compose-plugin >/dev/null 2>&1 || \
+                    sudo dnf install -y docker-compose-plugin >/dev/null 2>&1
                 else
                     print_error "sudo is required but not installed."
                     return 1
@@ -491,9 +267,10 @@ install_docker_compose() {
         *)
             # Fallback: Install standalone docker-compose
             print_info "Installing standalone Docker Compose..."
-            COMPOSE_VERSION="v2.24.0"
+            local COMPOSE_VERSION="v2.24.0"
             if command_exists curl; then
-                curl -L "https://github.com/docker/compose/releases/download/${COMPOSE_VERSION}/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+                curl -L "https://github.com/docker/compose/releases/download/${COMPOSE_VERSION}/docker-compose-$(uname -s)-$(uname -m)" \
+                    -o /usr/local/bin/docker-compose
                 chmod +x /usr/local/bin/docker-compose
             else
                 print_error "curl is required but not installed."
@@ -505,12 +282,12 @@ install_docker_compose() {
     # Verify installation
     sleep 2
     if docker compose version >/dev/null 2>&1; then
-        COMPOSE_VERSION=$(docker compose version | awk '{print $4}')
+        local COMPOSE_VERSION=$(docker compose version | awk '{print $4}')
         print_success "Docker Compose installed successfully (version: $COMPOSE_VERSION)"
         DOCKER_COMPOSE_CMD="docker compose"
         return 0
     elif command_exists docker-compose; then
-        COMPOSE_VERSION=$(docker-compose --version | awk '{print $3}' | sed 's/,//')
+        local COMPOSE_VERSION=$(docker-compose --version | awk '{print $3}' | sed 's/,//')
         print_success "Docker Compose installed successfully (version: $COMPOSE_VERSION)"
         DOCKER_COMPOSE_CMD="docker-compose"
         return 0
@@ -520,7 +297,6 @@ install_docker_compose() {
     fi
 }
 
-# Function to start Docker daemon
 start_docker_daemon() {
     print_info "Starting Docker daemon..."
     
@@ -555,232 +331,131 @@ start_docker_daemon() {
     fi
 }
 
-# Function to configure firewall
-configure_firewall() {
-    local PORT=$1
-    
-    if [ -z "$PORT" ]; then
-        PORT=5000
-    fi
-    
-    print_info "Checking firewall configuration..."
-    
-    # Check for UFW (Ubuntu/Debian)
-    if command_exists ufw; then
-        if ufw status | grep -q "Status: active"; then
-            print_info "UFW firewall is active"
-            read -p "Do you want to open port $PORT in UFW? (Y/n): " open_port
-            if [[ ! $open_port =~ ^[Nn]$ ]]; then
-                if [ "$EUID" -eq 0 ]; then
-                    ufw allow $PORT/tcp
-                    print_success "Port $PORT opened in UFW"
-                else
-                    if command_exists sudo; then
-                        sudo ufw allow $PORT/tcp
-                        print_success "Port $PORT opened in UFW"
-                    else
-                        print_warning "Please run manually: sudo ufw allow $PORT/tcp"
-                    fi
-                fi
-            fi
-        fi
-    # Check for firewalld (CentOS/RHEL/Fedora)
-    elif command_exists firewall-cmd; then
-        if systemctl is-active --quiet firewalld 2>/dev/null; then
-            print_info "firewalld is active"
-            read -p "Do you want to open port $PORT in firewalld? (Y/n): " open_port
-            if [[ ! $open_port =~ ^[Nn]$ ]]; then
-                if [ "$EUID" -eq 0 ]; then
-                    firewall-cmd --permanent --add-port=$PORT/tcp
-                    firewall-cmd --reload
-                    print_success "Port $PORT opened in firewalld"
-                else
-                    if command_exists sudo; then
-                        sudo firewall-cmd --permanent --add-port=$PORT/tcp
-                        sudo firewall-cmd --reload
-                        print_success "Port $PORT opened in firewalld"
-                    else
-                        print_warning "Please run manually: sudo firewall-cmd --permanent --add-port=$PORT/tcp && sudo firewall-cmd --reload"
-                    fi
-                fi
-            fi
-        fi
-    else
-        print_info "No common firewall detected (ufw/firewalld). You may need to configure your firewall manually."
-    fi
-}
+# ============================================================================
+# Prerequisite Checking Functions
+# ============================================================================
 
-# Function to show menu
-show_menu() {
-    welcome
-    
-    options=(
-        "Full Installation (Recommended - Configure, Build, Start, Migrate, Verify)"
-        "Configuration Only (Create .env file, skip Docker operations)"
-        "Build and Start Services Only (Skip configuration)"
-        "Run Database Migrations Only"
-        "Verify Installation (Check service status and health)"
-        "Exit"
-    )
-    
-    actions=(
-        "full"
-        "config"
-        "build"
-        "migrate"
-        "verify"
-        "exit"
-    )
-    
-    output "What would you like to do?"
-    echo ""
-    for i in "${!options[@]}"; do
-        echo -e "  [${GREEN}$i${NC}] ${options[$i]}"
-    done
-    echo ""
-    echo -n "* Input 0-$((${#actions[@]} - 1)): "
-    # Flush output before reading
-    exec >&1
-    # Check if we have an interactive terminal
-    if [ ! -t 0 ]; then
-        print_error "This script requires an interactive terminal"
-        exit 1
-    fi
-    read -r action
-    
-    [ -z "$action" ] && print_error "Input is required" && return 1
-    
-    valid_input=("$(for ((i = 0; i <= ${#actions[@]} - 1; i += 1)); do echo "${i}"; done)")
-    [[ ! " ${valid_input[*]} " =~ ${action} ]] && print_error "Invalid option" && return 1
-    
-    if [[ " ${valid_input[*]} " =~ ${action} ]]; then
-        echo "${actions[$action]}"
-        return 0
-    fi
-    
-    return 1
-}
-
-# Function to check prerequisites (extracted from main flow)
 check_prerequisites() {
-    echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-    echo -e "${BLUE}Checking Prerequisites${NC}"
-    echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    print_header "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    print_header "Checking Prerequisites"
+    print_header "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo ""
-
+    
     # Check Docker
     if command_exists docker; then
-        DOCKER_VERSION=$(docker --version | awk '{print $3}' | sed 's/,//')
+        local DOCKER_VERSION=$(docker --version | awk '{print $3}' | sed 's/,//')
         print_success "Docker is installed (version: $DOCKER_VERSION)"
     else
         print_error "Docker is not installed"
         echo ""
-        read -p "Do you want to install Docker automatically? (Y/n): " install_docker_choice
-        if [[ ! $install_docker_choice =~ ^[Nn]$ ]]; then
+        if confirm_action "Do you want to install Docker automatically?" "Y"; then
             if install_docker; then
                 print_success "Docker installation completed"
             else
                 print_error "Docker installation failed. Please install manually:"
                 echo "  - Linux: https://docs.docker.com/engine/install/"
-                exit 1
+                return 1
             fi
         else
-            echo "Please install Docker first:"
-            echo "  - Linux: https://docs.docker.com/engine/install/"
-            exit 1
+            print_error "Docker is required. Please install it first."
+            return 1
         fi
     fi
-
+    
     # Check Docker Compose
     if command_exists docker-compose || docker compose version >/dev/null 2>&1; then
         if docker compose version >/dev/null 2>&1; then
-            COMPOSE_VERSION=$(docker compose version | awk '{print $4}')
+            local COMPOSE_VERSION=$(docker compose version | awk '{print $4}')
             print_success "Docker Compose is installed (version: $COMPOSE_VERSION)"
             DOCKER_COMPOSE_CMD="docker compose"
         else
-            COMPOSE_VERSION=$(docker-compose --version | awk '{print $3}' | sed 's/,//')
+            local COMPOSE_VERSION=$(docker-compose --version | awk '{print $3}' | sed 's/,//')
             print_success "Docker Compose is installed (version: $COMPOSE_VERSION)"
             DOCKER_COMPOSE_CMD="docker-compose"
         fi
     else
         print_error "Docker Compose is not installed"
         echo ""
-        read -p "Do you want to install Docker Compose automatically? (Y/n): " install_compose_choice
-        if [[ ! $install_compose_choice =~ ^[Nn]$ ]]; then
+        if confirm_action "Do you want to install Docker Compose automatically?" "Y"; then
             if install_docker_compose; then
                 print_success "Docker Compose installation completed"
             else
                 print_error "Docker Compose installation failed. Please install manually:"
                 echo "  https://docs.docker.com/compose/install/"
-                exit 1
+                return 1
             fi
         else
-            echo "Please install Docker Compose first:"
-            echo "  https://docs.docker.com/compose/install/"
-            exit 1
+            print_error "Docker Compose is required. Please install it first."
+            return 1
         fi
     fi
-
+    
     # Check if Docker is running
     if docker info >/dev/null 2>&1; then
         print_success "Docker daemon is running"
     else
         print_error "Docker daemon is not running"
         echo ""
-        read -p "Do you want to start Docker daemon automatically? (Y/n): " start_docker_choice
-        if [[ ! $start_docker_choice =~ ^[Nn]$ ]]; then
+        if confirm_action "Do you want to start Docker daemon automatically?" "Y"; then
             if start_docker_daemon; then
                 print_success "Docker daemon started"
             else
                 print_error "Failed to start Docker daemon. Please start manually and try again."
-                exit 1
+                return 1
             fi
         else
-            echo "Please start Docker and try again."
-            exit 1
+            print_error "Docker daemon must be running. Please start it and try again."
+            return 1
         fi
     fi
-
+    
     echo ""
+    return 0
 }
 
-# Function to create configuration
-create_configuration() {
-    # Step 2: Check if .env already exists
-if [ -f .env ]; then
-    echo -e "${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-    print_warning "A .env file already exists!"
+install_prerequisites() {
+    print_header "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    print_header "Install Prerequisites"
+    print_header "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo ""
-    read -p "Do you want to overwrite it? (y/N): " overwrite
-    if [[ ! $overwrite =~ ^[Yy]$ ]]; then
-        print_info "Keeping existing .env file"
-        echo ""
-        read -p "Do you want to continue with setup? (Y/n): " continue_setup
-        if [[ $continue_setup =~ ^[Nn]$ ]]; then
-            echo "Setup cancelled."
-            exit 0
-        fi
-        SKIP_ENV_CREATION=true
-    else
-        print_info "Will overwrite existing .env file"
-        SKIP_ENV_CREATION=false
-    fi
-    echo ""
-else
-    SKIP_ENV_CREATION=false
-fi
+    
+    check_prerequisites
+}
 
-# Step 3: Configuration
-if [ "$SKIP_ENV_CREATION" != "true" ]; then
-    echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-    echo -e "${BLUE}Step 2: Configuration${NC}"
-    echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+# ============================================================================
+# Configuration Functions
+# ============================================================================
+
+create_configuration() {
+    print_header "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    print_header "Configuration Wizard"
+    print_header "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo ""
+    
+    # Check if .env already exists
+    if [ -f .env ]; then
+        print_warning "A .env file already exists!"
+        echo ""
+        if ! confirm_action "Do you want to overwrite it?" "N"; then
+            print_info "Keeping existing .env file"
+            SKIP_ENV_CREATION=true
+            return 0
+        fi
+        # Create backup
+        BACKUP_FILE=".env.backup.$(date +%Y%m%d_%H%M%S)"
+        cp .env "$BACKUP_FILE" 2>/dev/null && \
+            print_success "Backup created: $BACKUP_FILE" || \
+            print_warning "Could not create backup"
+        echo ""
+    fi
+    
+    SKIP_ENV_CREATION=false
+    
     print_info "We'll ask you a few questions to configure Aether Dashboard"
     echo ""
-
+    
     # Server Configuration
-    echo -e "${YELLOW}Server Configuration${NC}"
+    print_header "Server Configuration"
     echo "────────────────────────────────────────────────────────────────────────────"
     
     read -p "Port (default: 5000): " PORT
@@ -794,18 +469,17 @@ if [ "$SKIP_ENV_CREATION" != "true" ]; then
     echo ""
     
     # Frontend URL Configuration
-    echo -e "${YELLOW}Frontend URL Configuration${NC}"
+    print_header "Frontend URL Configuration"
     echo "────────────────────────────────────────────────────────────────────────────"
     print_info "This is required for CORS and external access. We'll try to detect your VPS IP automatically."
     
-    VPS_IP=$(get_vps_ip)
+    local VPS_IP=$(get_vps_ip)
     if [ -n "$VPS_IP" ]; then
         print_info "Detected VPS IP: $VPS_IP"
         echo ""
         
         # Ask if user wants to use a subdomain
-        read -p "Do you want to use a subdomain (e.g., dashboard.yourdomain.com)? (y/N): " use_subdomain
-        if [[ $use_subdomain =~ ^[Yy]$ ]]; then
+        if confirm_action "Do you want to use a subdomain (e.g., dashboard.yourdomain.com)?" "N"; then
             echo ""
             print_info "Subdomain Setup with Cloudflare"
             echo "────────────────────────────────────────────────────────────────────────────"
@@ -813,18 +487,17 @@ if [ "$SKIP_ENV_CREATION" != "true" ]; then
             read -p "Enter your subdomain (e.g., dashboard.hosting.com): " SUBDOMAIN
             while [ -z "$SUBDOMAIN" ]; do
                 print_error "Subdomain cannot be empty"
-                read -p "Enter your subdomain (e.g., dashboard.hosting.com): " SUBDOMAIN
+                read -p "Enter your subdomain: " SUBDOMAIN
             done
             
-            # Validate subdomain format (basic validation)
+            # Validate subdomain format
             if [[ ! $SUBDOMAIN =~ ^[a-zA-Z0-9][a-zA-Z0-9\.-]*[a-zA-Z0-9]$ ]] || [[ $SUBDOMAIN =~ \.\. ]] || [[ ! $SUBDOMAIN =~ \. ]]; then
                 print_error "Invalid subdomain format. Please use format like: dashboard.hosting.com"
                 read -p "Enter your subdomain: " SUBDOMAIN
             fi
             
-            # Extract subdomain name and root domain
-            SUBDOMAIN_NAME="${SUBDOMAIN%%.*}"  # e.g., "dashboard" from "dashboard.hosting.com"
-            ROOT_DOMAIN="${SUBDOMAIN#*.}"      # e.g., "hosting.com" from "dashboard.hosting.com"
+            local SUBDOMAIN_NAME="${SUBDOMAIN%%.*}"
+            local ROOT_DOMAIN="${SUBDOMAIN#*.}"
             
             echo ""
             print_warning "IMPORTANT: DNS Configuration Required"
@@ -848,13 +521,12 @@ if [ "$SKIP_ENV_CREATION" != "true" ]; then
             echo "  8. Enable Proxy (orange cloud) for HTTPS support"
             echo "  9. Click 'Save'"
             echo ""
-            echo -e "${YELLOW}Note:${NC} DNS propagation can take a few minutes to 24 hours, but usually happens within 5-10 minutes."
+            echo -e "${YELLOW}Note:${NC} DNS propagation can take a few minutes to 24 hours."
             echo ""
-            read -p "Press Enter once you've configured the DNS record in Cloudflare..."
+            read -p "Press Enter once you've configured the DNS record..."
             
             # Ask if they want to use HTTPS
-            read -p "Do you want to use HTTPS (requires Cloudflare proxy enabled)? (Y/n): " use_https
-            if [[ ! $use_https =~ ^[Nn]$ ]]; then
+            if confirm_action "Do you want to use HTTPS (requires Cloudflare proxy enabled)?" "Y"; then
                 FRONTEND_URL="https://$SUBDOMAIN"
                 print_success "Frontend URL set to: $FRONTEND_URL (HTTPS)"
             else
@@ -863,7 +535,7 @@ if [ "$SKIP_ENV_CREATION" != "true" ]; then
             fi
         else
             # Use IP address
-            DETECTED_URL="http://$VPS_IP:$PORT"
+            local DETECTED_URL="http://$VPS_IP:$PORT"
             read -p "Frontend URL (default: $DETECTED_URL): " FRONTEND_URL
             FRONTEND_URL=${FRONTEND_URL:-$DETECTED_URL}
             print_success "Frontend URL set to: $FRONTEND_URL"
@@ -871,43 +543,24 @@ if [ "$SKIP_ENV_CREATION" != "true" ]; then
     else
         print_warning "Could not automatically detect VPS IP"
         echo ""
-        read -p "Do you want to use a subdomain? (y/N): " use_subdomain
-        if [[ $use_subdomain =~ ^[Yy]$ ]]; then
+        if confirm_action "Do you want to use a subdomain?" "N"; then
             read -p "Enter your subdomain (e.g., dashboard.hosting.com): " SUBDOMAIN
             while [ -z "$SUBDOMAIN" ]; do
                 print_error "Subdomain cannot be empty"
                 read -p "Enter your subdomain: " SUBDOMAIN
             done
             
-            # Extract subdomain name and root domain
-            SUBDOMAIN_NAME="${SUBDOMAIN%%.*}"
-            ROOT_DOMAIN="${SUBDOMAIN#*.}"
+            local SUBDOMAIN_NAME="${SUBDOMAIN%%.*}"
+            local ROOT_DOMAIN="${SUBDOMAIN#*.}"
             
             echo ""
             print_warning "IMPORTANT: DNS Configuration Required"
             echo "────────────────────────────────────────────────────────────────────────────"
             echo ""
-            echo "You need to configure a DNS A record in Cloudflare:"
-            echo ""
-            echo -e "  ${GREEN}Record Type:${NC}  A"
-            echo -e "  ${GREEN}Name:${NC}         $SUBDOMAIN_NAME"
-            echo -e "  ${GREEN}Content:${NC}       [Your VPS IP Address]"
-            echo -e "  ${GREEN}Proxy:${NC}         Proxied (orange cloud) - Recommended for HTTPS"
-            echo ""
-            echo "Steps to configure in Cloudflare:"
-            echo "  1. Log in to your Cloudflare dashboard"
-            echo "  2. Select your domain ($ROOT_DOMAIN)"
-            echo "  3. Go to DNS > Records"
-            echo "  4. Click 'Add record'"
-            echo "  5. Set Type: A"
-            echo "  6. Set Name: $SUBDOMAIN_NAME"
-            echo "  7. Set IPv4 address: [Your VPS IP]"
-            echo "  8. Enable Proxy (orange cloud) for HTTPS support"
-            echo "  9. Click 'Save'"
+            echo "You need to configure a DNS A record in Cloudflare pointing to your VPS IP."
             echo ""
             read -p "Enter your VPS IP address: " VPS_IP
-            read -p "Do you want to use HTTPS? (Y/n): " use_https
-            if [[ ! $use_https =~ ^[Nn]$ ]]; then
+            if confirm_action "Do you want to use HTTPS?" "Y"; then
                 FRONTEND_URL="https://$SUBDOMAIN"
             else
                 FRONTEND_URL="http://$SUBDOMAIN"
@@ -923,13 +576,12 @@ if [ "$SKIP_ENV_CREATION" != "true" ]; then
         fi
     fi
     echo ""
-
+    
     # JWT Secret
-    echo -e "${YELLOW}Security Configuration${NC}"
+    print_header "Security Configuration"
     echo "────────────────────────────────────────────────────────────────────────────"
     
-    read -p "Generate a secure JWT secret automatically? (Y/n): " generate_jwt
-    if [[ ! $generate_jwt =~ ^[Nn]$ ]]; then
+    if confirm_action "Generate a secure JWT secret automatically?" "Y"; then
         JWT_SECRET=$(generate_secret)
         print_success "JWT secret generated automatically"
     else
@@ -941,9 +593,9 @@ if [ "$SKIP_ENV_CREATION" != "true" ]; then
         print_success "JWT secret set"
     fi
     echo ""
-
+    
     # Admin Email Configuration
-    echo -e "${YELLOW}Admin Configuration${NC}"
+    print_header "Admin Configuration"
     echo "────────────────────────────────────────────────────────────────────────────"
     print_info "Enter the email address that should be assigned admin role automatically"
     echo ""
@@ -955,9 +607,9 @@ if [ "$SKIP_ENV_CREATION" != "true" ]; then
         print_info "No admin email configured. You can set it later in the .env file."
     fi
     echo ""
-
+    
     # Database Configuration
-    echo -e "${YELLOW}Database Configuration${NC}"
+    print_header "Database Configuration"
     echo "────────────────────────────────────────────────────────────────────────────"
     
     read -p "Database name (default: aether_dashboard): " DB_NAME
@@ -975,27 +627,26 @@ if [ "$SKIP_ENV_CREATION" != "true" ]; then
     done
     print_success "Database configuration set"
     echo ""
-
+    
     # Redis Configuration
-    echo -e "${YELLOW}Redis Configuration${NC}"
+    print_header "Redis Configuration"
     echo "────────────────────────────────────────────────────────────────────────────"
     
-    read -p "Enable Redis? (Y/n): " enable_redis
-    if [[ $enable_redis =~ ^[Nn]$ ]]; then
-        REDIS_ENABLED="false"
-        REDIS_PASSWORD=""
-        print_info "Redis disabled"
-    else
+    if confirm_action "Enable Redis?" "Y"; then
         REDIS_ENABLED="true"
         read -sp "Redis password (optional, press Enter to skip): " REDIS_PASSWORD
         echo ""
         REDIS_PASSWORD=${REDIS_PASSWORD:-}
         print_success "Redis enabled"
+    else
+        REDIS_ENABLED="false"
+        REDIS_PASSWORD=""
+        print_info "Redis disabled"
     fi
     echo ""
-
+    
     # Pterodactyl Configuration
-    echo -e "${YELLOW}Pterodactyl Panel Configuration${NC}"
+    print_header "Pterodactyl Panel Configuration"
     echo "────────────────────────────────────────────────────────────────────────────"
     print_info "You'll need API keys from your Pterodactyl Panel"
     echo ""
@@ -1015,16 +666,14 @@ if [ "$SKIP_ENV_CREATION" != "true" ]; then
     
     print_success "Pterodactyl configuration set"
     echo ""
-
+    
     # Revenue System Configuration
-    echo -e "${YELLOW}Revenue System Configuration${NC}"
+    print_header "Revenue System Configuration"
     echo "────────────────────────────────────────────────────────────────────────────"
     print_info "Configure coin earning methods (press Enter for defaults)"
     echo ""
     
-    read -p "Enable Linkvertise? (Y/n): " enable_linkvertise
-    LINKVERTISE_ENABLED=${enable_linkvertise:-Y}
-    if [[ ! $LINKVERTISE_ENABLED =~ ^[Nn]$ ]]; then
+    if confirm_action "Enable Linkvertise?" "Y"; then
         LINKVERTISE_ENABLED="true"
         read -p "Linkvertise API Key (optional): " LINKVERTISE_API_KEY
         LINKVERTISE_API_KEY=${LINKVERTISE_API_KEY:-}
@@ -1036,35 +685,44 @@ if [ "$SKIP_ENV_CREATION" != "true" ]; then
         LINKVERTISE_COINS="50"
     fi
     
-    read -p "Enable AFK page? (Y/n): " enable_afk
-    AFK_ENABLED=${enable_afk:-Y}
-    AFK_ENABLED=$([ "$AFK_ENABLED" != "n" ] && [ "$AFK_ENABLED" != "N" ] && echo "true" || echo "false")
+    if confirm_action "Enable AFK page?" "Y"; then
+        AFK_ENABLED="true"
+    else
+        AFK_ENABLED="false"
+    fi
     
-    read -p "Enable Surveys? (Y/n): " enable_surveys
-    SURVEYS_ENABLED=${enable_surveys:-Y}
-    SURVEYS_ENABLED=$([ "$SURVEYS_ENABLED" != "n" ] && [ "$SURVEYS_ENABLED" != "N" ] && echo "true" || echo "false")
+    if confirm_action "Enable Surveys?" "Y"; then
+        SURVEYS_ENABLED="true"
+    else
+        SURVEYS_ENABLED="false"
+    fi
     
-    read -p "Enable Ads? (Y/n): " enable_ads
-    ADS_ENABLED=${enable_ads:-Y}
-    ADS_ENABLED=$([ "$ADS_ENABLED" != "n" ] && [ "$ADS_ENABLED" != "N" ] && echo "true" || echo "false")
+    if confirm_action "Enable Ads?" "Y"; then
+        ADS_ENABLED="true"
+    else
+        ADS_ENABLED="false"
+    fi
     
-    read -p "Enable Referral system? (Y/n): " enable_referral
-    REFERRAL_ENABLED=${enable_referral:-Y}
-    REFERRAL_ENABLED=$([ "$REFERRAL_ENABLED" != "n" ] && [ "$REFERRAL_ENABLED" != "N" ] && echo "true" || echo "false")
+    if confirm_action "Enable Referral system?" "Y"; then
+        REFERRAL_ENABLED="true"
+    else
+        REFERRAL_ENABLED="false"
+    fi
     
-    read -p "Enable Daily login bonus? (Y/n): " enable_daily
-    DAILY_LOGIN_ENABLED=${enable_daily:-Y}
-    DAILY_LOGIN_ENABLED=$([ "$DAILY_LOGIN_ENABLED" != "n" ] && [ "$DAILY_LOGIN_ENABLED" != "N" ] && echo "true" || echo "false")
+    if confirm_action "Enable Daily login bonus?" "Y"; then
+        DAILY_LOGIN_ENABLED="true"
+    else
+        DAILY_LOGIN_ENABLED="false"
+    fi
     
     print_success "Revenue system configuration set"
     echo ""
-
-    # Step 4: Create .env file
-    echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-    echo -e "${BLUE}Step 3: Creating Configuration File${NC}"
-    echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    
+    # Create .env file
+    print_header "Creating Configuration File"
+    echo "────────────────────────────────────────────────────────────────────────────"
     echo ""
-
+    
     cat > .env << EOF
 # Aether Dashboard Configuration
 # Generated by setup.sh on $(date)
@@ -1123,25 +781,32 @@ REFERRAL_COMMISSION=10
 DAILY_LOGIN_ENABLED=$DAILY_LOGIN_ENABLED
 DAILY_LOGIN_COINS=25
 EOF
-
+    
     print_success ".env file created successfully"
     echo ""
-    fi
 }
 
-# Function to execute build and start services
-execute_build_and_start() {
-    echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-    echo -e "${BLUE}Building and Starting Services${NC}"
-    echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+# ============================================================================
+# Build and Start Functions
+# ============================================================================
+
+build_and_start() {
+    print_header "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    print_header "Building and Starting Services"
+    print_header "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo ""
+    
+    if [ ! -f .env ]; then
+        print_error ".env file not found. Please run 'Configuration Only' first."
+        return 1
+    fi
     
     print_info "Building Docker images..."
     if $DOCKER_COMPOSE_CMD build; then
         print_success "Docker images built successfully"
     else
         print_error "Failed to build Docker images"
-        exit 1
+        return 1
     fi
     
     echo ""
@@ -1150,7 +815,7 @@ execute_build_and_start() {
         print_success "Services started successfully"
     else
         print_error "Failed to start services"
-        exit 1
+        return 1
     fi
     
     echo ""
@@ -1158,12 +823,20 @@ execute_build_and_start() {
     sleep 5
 }
 
-# Function to run database migrations
+# ============================================================================
+# Migration Functions
+# ============================================================================
+
 run_migrations() {
-    echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-    echo -e "${BLUE}Running Database Migrations${NC}"
-    echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    print_header "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    print_header "Running Database Migrations"
+    print_header "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo ""
+    
+    if [ ! -f .env ]; then
+        print_error ".env file not found. Please run configuration first."
+        return 1
+    fi
     
     print_info "Waiting for database to be ready..."
     
@@ -1189,7 +862,7 @@ run_migrations() {
     
     print_info "Running database migrations..."
     
-    if retry_command 3 5 $DOCKER_COMPOSE_CMD exec -T aether-dashboard npm run migrate; then
+    if $DOCKER_COMPOSE_CMD exec -T aether-dashboard npm run migrate >/dev/null 2>&1; then
         print_success "Database migrations completed"
         return 0
     else
@@ -1198,62 +871,238 @@ run_migrations() {
     fi
 }
 
-# Main execution function
-execute() {
-    local action=$1
+# ============================================================================
+# Verification Functions
+# ============================================================================
+
+verify_installation() {
+    print_header "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    print_header "Verifying Installation"
+    print_header "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo ""
+    
+    print_info "Checking service status..."
+    
+    # Check services status
+    local services=("aether-dashboard" "aether-postgres" "aether-redis")
+    local all_healthy=true
+    
+    for service in "${services[@]}"; do
+        if $DOCKER_COMPOSE_CMD ps 2>/dev/null | grep -q "$service.*Up"; then
+            print_success "$service is running"
+        else
+            print_error "$service is not running"
+            all_healthy=false
+        fi
+    done
+    
+    echo ""
+    
+    # Health check with retries
+    local PORT=$(grep "^PORT=" .env 2>/dev/null | cut -d'=' -f2 | tr -d '"' || echo "5000")
+    PORT=${PORT:-5000}
+    
+    print_info "Testing health endpoint..."
+    local max_attempts=30
+    local attempt=1
+    
+    while [ $attempt -le $max_attempts ]; do
+        if curl -f -s "http://localhost:$PORT/health" >/dev/null 2>&1; then
+            print_success "Aether Dashboard is running and healthy!"
+            return 0
+        fi
+        if [ $attempt -lt $max_attempts ]; then
+            printf "\rWaiting for service... (attempt $attempt/$max_attempts) "
+            sleep 2
+        fi
+        attempt=$((attempt + 1))
+    done
+    
+    printf "\r"
+    if [ "$all_healthy" = true ]; then
+        print_warning "Health check failed, but services appear to be running"
+        print_info "Wait a few more seconds and check: http://localhost:$PORT/health"
+        return 0
+    else
+        print_error "Some services failed to start"
+        return 1
+    fi
+}
+
+# ============================================================================
+# Summary Functions
+# ============================================================================
+
+show_summary() {
+    echo ""
+    print_header "╔══════════════════════════════════════════════════════════╗"
+    print_header "║              Installation Complete! 🎉                  ║"
+    print_header "╚══════════════════════════════════════════════════════════╝"
+    echo ""
+    
+    print_header "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    print_header "Installation Summary"
+    print_header "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo ""
+    echo -e "  ${BLUE}Configuration File:${NC}  .env"
+    if [ -n "$BACKUP_FILE" ] && [ -f "$BACKUP_FILE" ]; then
+        echo -e "  ${BLUE}Backup File:${NC}          $BACKUP_FILE"
+    fi
+    echo ""
+    
+    print_header "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    print_header "Access Your Aether Dashboard"
+    print_header "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo ""
+    
+    local FRONTEND_URL=$(grep "^FRONTEND_URL=" .env 2>/dev/null | cut -d'=' -f2 | tr -d '"' || echo "")
+    local PORT=$(grep "^PORT=" .env 2>/dev/null | cut -d'=' -f2 | tr -d '"' || echo "5000")
+    PORT=${PORT:-5000}
+    
+    if [ -n "$FRONTEND_URL" ]; then
+        echo -e "  ${GREEN}Dashboard URL:${NC}   $FRONTEND_URL"
+        if [[ $FRONTEND_URL =~ ^https?://[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+ ]]; then
+            echo -e "  ${GREEN}Local Access:${NC}    http://localhost:$PORT"
+        fi
+    else
+        local VPS_IP=$(get_vps_ip)
+        if [ -n "$VPS_IP" ]; then
+            echo -e "  ${GREEN}Local Access:${NC}    http://localhost:$PORT"
+            echo -e "  ${GREEN}External Access:${NC} http://$VPS_IP:$PORT"
+        else
+            echo -e "  ${GREEN}Local Access:${NC}    http://localhost:$PORT"
+        fi
+    fi
+    echo -e "  ${GREEN}Health Check:${NC}    http://localhost:$PORT/health"
+    echo ""
+    
+    print_header "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    print_header "Useful Commands"
+    print_header "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo ""
+    echo "  View logs:        $DOCKER_COMPOSE_CMD logs -f aether-dashboard"
+    echo "  Stop services:    $DOCKER_COMPOSE_CMD down"
+    echo "  Restart:          $DOCKER_COMPOSE_CMD restart"
+    echo "  View status:      $DOCKER_COMPOSE_CMD ps"
+    echo ""
+    
+    print_header "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    print_header "Next Steps"
+    print_header "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo ""
+    if [ -n "$FRONTEND_URL" ]; then
+        echo "  1. Open $FRONTEND_URL in your browser"
+    else
+        echo "  1. Open http://localhost:$PORT in your browser"
+    fi
+    echo "  2. Register your first admin account"
+    echo "  3. Configure your Pterodactyl Panel integration"
+    echo "  4. Start managing game servers!"
+    echo ""
+    echo -e "${GREEN}Enjoy using Aether Dashboard! 🚀${NC}"
+    echo ""
+}
+
+# ============================================================================
+# Menu Functions
+# ============================================================================
+
+show_menu() {
+    # Only clear if we have a TTY (interactive terminal)
+    [ -t 1 ] && clear 2>/dev/null || true
+    
+    echo -e "${BLUE}"
+    echo "╔══════════════════════════════════════════════════════════╗"
+    echo "║      Aether Dashboard - Setup Wizard                    ║"
+    echo "║                    Version $SCRIPT_VERSION                    ║"
+    echo "╚══════════════════════════════════════════════════════════╝"
+    echo -e "${NC}"
+    echo ""
+    print_info "Welcome to Aether Dashboard installation!"
+    echo ""
+    
+    # Flush output before reading
+    flush_output
+    
+    # Check if we have an interactive terminal
+    if [ ! -t 0 ]; then
+        print_error "This script requires an interactive terminal"
+        exit 1
+    fi
+    
+    echo "What would you like to do?"
+    echo ""
+    echo -e "  [${GREEN}1${NC}] Install Prerequisites Only (Docker & Docker Compose)"
+    echo -e "  [${GREEN}2${NC}] Full Installation (Recommended)"
+    echo -e "  [${GREEN}3${NC}] Configuration Only (Create .env file)"
+    echo -e "  [${GREEN}4${NC}] Build & Start Services"
+    echo -e "  [${GREEN}5${NC}] Run Database Migrations"
+    echo -e "  [${GREEN}6${NC}] Verify Installation"
+    echo -e "  [${GREEN}7${NC}] Exit"
+    echo ""
+    echo -n "Enter your choice [1-7]: "
+    
+    flush_output
+    read -r choice
+    
+    case $choice in
+        1) echo "prerequisites" ;;
+        2) echo "full" ;;
+        3) echo "config" ;;
+        4) echo "build" ;;
+        5) echo "migrate" ;;
+        6) echo "verify" ;;
+        7) echo "exit" ;;
+        *)
+            print_error "Invalid choice"
+            return 1
+            ;;
+    esac
+}
+
+# ============================================================================
+# Main Execution
+# ============================================================================
+
+main() {
+    local action=$(show_menu)
+    
+    if [ -z "$action" ]; then
+        print_error "Invalid selection"
+        exit 1
+    fi
     
     case $action in
+        "prerequisites")
+            install_prerequisites
+            ;;
         "full")
-            # Run all steps
-            check_prerequisites
+            check_prerequisites || exit 1
             create_configuration
-            if [ "$SKIP_ENV_CREATION" != "true" ]; then
-                if ! validate_configuration; then
-                    print_error "Configuration validation failed. Please fix the errors and try again."
-                    exit 1
-                fi
-            fi
-            create_backup
-            if ! preflight_checks; then
-                print_error "Pre-flight checks failed. Please fix the issues and try again."
-                exit 1
-            fi
-            execute_build_and_start
+            build_and_start || exit 1
             run_migrations
             verify_installation
-            show_final_summary
+            show_summary
             ;;
         "config")
-            check_prerequisites
+            check_prerequisites || exit 1
             create_configuration
-            if [ "$SKIP_ENV_CREATION" != "true" ]; then
-                validate_configuration
-            fi
-            create_backup
             print_success "Configuration completed!"
             echo ""
             echo "Next steps:"
             echo "  1. Review the .env file"
-            echo "  2. Run the script again and select 'Build and Start Services'"
+            echo "  2. Run the script again and select 'Build & Start Services'"
             ;;
         "build")
-            check_prerequisites
-            if [ ! -f .env ]; then
-                print_error ".env file not found. Please run 'Configuration Only' first."
-                exit 1
-            fi
-            execute_build_and_start
+            check_prerequisites || exit 1
+            build_and_start
             ;;
         "migrate")
-            check_prerequisites
-            if [ ! -f .env ]; then
-                print_error ".env file not found. Please run configuration first."
-                exit 1
-            fi
+            check_prerequisites || exit 1
             run_migrations
             ;;
         "verify")
-            check_prerequisites
+            check_prerequisites || exit 1
             verify_installation
             ;;
         "exit")
@@ -1265,139 +1114,6 @@ execute() {
             exit 1
             ;;
     esac
-}
-
-# Function to show final summary
-show_final_summary() {
-    show_installation_summary
-}
-
-# Function to verify installation
-verify_installation() {
-    echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-    echo -e "${BLUE}Verifying Installation${NC}"
-    echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-    echo ""
-    
-    print_info "Checking service health..."
-    
-    # Check services status
-    check_services_status
-    echo ""
-    
-    # Health check with retries
-    # Load PORT from .env if not set
-    if [ -z "$PORT" ] && [ -f .env ]; then
-        PORT=$(grep "^PORT=" .env | cut -d'=' -f2 | tr -d '"' || echo "5000")
-    fi
-    PORT=${PORT:-5000}
-    
-    if wait_for_health "http://localhost:$PORT/health"; then
-        print_success "Aether Dashboard is running and healthy!"
-        return 0
-    else
-        print_warning "Health check failed, but services might still be starting"
-        print_info "Wait a few more seconds and check: http://localhost:$PORT/health"
-        return 1
-    fi
-}
-
-# Function to show installation summary
-show_installation_summary() {
-    echo ""
-    echo -e "${GREEN}╔══════════════════════════════════════════════════════════╗${NC}"
-    echo -e "${GREEN}║              Installation Complete! 🎉                  ║${NC}"
-    echo -e "${GREEN}╚══════════════════════════════════════════════════════════╝${NC}"
-    echo ""
-    
-    echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-    echo -e "${GREEN}Installation Summary:${NC}"
-    echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-    echo ""
-    echo -e "  ${BLUE}Configuration File:${NC}  .env"
-    if [ -n "$BACKUP_FILE" ] && [ -f "$BACKUP_FILE" ]; then
-        echo -e "  ${BLUE}Backup File:${NC}          $BACKUP_FILE"
-    fi
-    echo ""
-    
-    echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-    echo -e "${GREEN}Access Your Aether Dashboard:${NC}"
-    echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-    echo ""
-
-# Get VPS IP for display
-VPS_IP=$(get_vps_ip)
-if [ -n "$FRONTEND_URL" ]; then
-    echo -e "  ${GREEN}Dashboard URL:${NC}   $FRONTEND_URL"
-    # If using IP address, also show local access
-    if [[ $FRONTEND_URL =~ ^https?://[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+ ]]; then
-        echo -e "  ${GREEN}Local Access:${NC}    http://localhost:$PORT"
-    fi
-    echo -e "  ${GREEN}Health Check:${NC}    http://localhost:$PORT/health"
-else
-    if [ -n "$VPS_IP" ]; then
-        echo -e "  ${GREEN}Local Access:${NC}    http://localhost:$PORT"
-        echo -e "  ${GREEN}External Access:${NC} http://$VPS_IP:$PORT"
-        echo -e "  ${GREEN}Health Check:${NC}    http://localhost:$PORT/health"
-    else
-        echo -e "  ${GREEN}Local Access:${NC}    http://localhost:$PORT"
-        echo -e "  ${GREEN}Health Check:${NC}    http://localhost:$PORT/health"
-        print_warning "Could not detect VPS IP. Use your server's IP address to access externally."
-    fi
-fi
-echo ""
-echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-echo -e "${YELLOW}Useful Commands:${NC}"
-echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-echo ""
-echo "  View logs:        $DOCKER_COMPOSE_CMD logs -f aether-dashboard"
-echo "  Stop services:    $DOCKER_COMPOSE_CMD down"
-echo "  Restart:          $DOCKER_COMPOSE_CMD restart"
-echo "  View status:      $DOCKER_COMPOSE_CMD ps"
-echo ""
-echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-echo -e "${YELLOW}Next Steps:${NC}"
-echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-echo ""
-if [ -n "$FRONTEND_URL" ]; then
-    echo "  1. Open $FRONTEND_URL in your browser"
-    if [[ $FRONTEND_URL =~ ^https?://[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+ ]]; then
-        echo "     (or http://localhost:$PORT locally)"
-    fi
-else
-    if [ -n "$VPS_IP" ]; then
-        echo "  1. Open http://$VPS_IP:$PORT in your browser (or http://localhost:$PORT locally)"
-    else
-        echo "  1. Open http://localhost:$PORT in your browser"
-    fi
-fi
-echo "  2. Register your first admin account"
-echo "  3. Configure your Pterodactyl Panel integration"
-echo "  4. Start managing game servers!"
-echo ""
-
-    # Configure firewall
-    if [ -n "$PORT" ]; then
-        configure_firewall "$PORT"
-    fi
-    
-    echo ""
-    echo -e "${GREEN}Enjoy using Aether Dashboard! 🚀${NC}"
-    echo ""
-}
-
-# Main execution flow
-main() {
-    # Show menu and get user choice
-    selected_action=$(show_menu)
-    
-    if [ -z "$selected_action" ]; then
-        print_error "Invalid selection"
-        exit 1
-    fi
-    
-    # Execute selected action
-    execute "$selected_action"
 }
 
 # Run main function
