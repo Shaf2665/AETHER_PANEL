@@ -75,6 +75,8 @@ print_info() {
 
 output() {
     echo -e "$1"
+    # Flush stdout before logging
+    exec >&1
     log_message "$1"
 }
 
@@ -104,6 +106,12 @@ validate_port() {
     else
         return 1
     fi
+}
+
+# Function to flush output
+flush_output() {
+    exec >&1
+    sync 2>/dev/null || true
 }
 
 # Function to show progress indicator
