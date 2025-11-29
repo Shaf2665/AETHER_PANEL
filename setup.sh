@@ -120,7 +120,7 @@ get_vps_ip() {
         fi
     fi
     
-    echo ""
+echo ""
     return 1
 }
 
@@ -170,6 +170,182 @@ flush_output() {
     exec >&1 2>&2
     # Try to flush any buffered output
     [ -t 1 ] && stty -echo 2>/dev/null || true
+}
+
+# ============================================================================
+# Firewall Configuration Functions
+# ============================================================================
+
+configure_firewall() {
+    local PORT=$1
+    PORT=${PORT:-5000}
+    
+    print_info "Configuring firewall to allow port $PORT..."
+    echo ""
+    
+    # Detect firewall type
+    local firewall_type=""
+    
+    if command_exists ufw; then
+        firewall_type="ufw"
+    elif command_exists firewall-cmd; then
+        firewall_type="firewalld"
+    elif command_exists iptables; then
+        firewall_type="iptables"
+    else
+        print_warning "No firewall detected. Port $PORT may need to be opened manually."
+        return 0
+    fi
+    
+    print_info "Detected firewall: $firewall_type"
+    echo ""
+    
+    case $firewall_type in
+        ufw)
+            if [ "$EUID" -eq 0 ]; then
+                # Check if ufw is active
+                if ufw status | grep -q "Status: active"; then
+                    print_info "UFW is active. Opening port $PORT..."
+                    ufw allow $PORT/tcp >/dev/null 2>&1
+                    if [ $? -eq 0 ]; then
+                        print_success "Port $PORT opened in UFW"
+                    else
+                        print_error "Failed to open port $PORT in UFW"
+                        return 1
+                    fi
+                else
+                    print_warning "UFW is installed but not active"
+                    if confirm_action "Do you want to enable UFW and open port $PORT?" "Y"; then
+                        ufw --force enable >/dev/null 2>&1
+                        ufw allow $PORT/tcp >/dev/null 2>&1
+                        print_success "UFW enabled and port $PORT opened"
+                    else
+                        print_warning "UFW not enabled. Port $PORT may not be accessible."
+                        return 0
+                    fi
+                fi
+            else
+                if command_exists sudo; then
+                    if sudo ufw status | grep -q "Status: active"; then
+                        print_info "UFW is active. Opening port $PORT..."
+                        sudo ufw allow $PORT/tcp >/dev/null 2>&1
+                        if [ $? -eq 0 ]; then
+                            print_success "Port $PORT opened in UFW"
+                        else
+                            print_error "Failed to open port $PORT in UFW"
+                            return 1
+                        fi
+                    else
+                        print_warning "UFW is installed but not active"
+                        if confirm_action "Do you want to enable UFW and open port $PORT?" "Y"; then
+                            sudo ufw --force enable >/dev/null 2>&1
+                            sudo ufw allow $PORT/tcp >/dev/null 2>&1
+                            print_success "UFW enabled and port $PORT opened"
+                        else
+                            print_warning "UFW not enabled. Port $PORT may not be accessible."
+                            return 0
+                        fi
+                    fi
+                else
+                    print_error "sudo is required to configure UFW"
+                    return 1
+                fi
+            fi
+            ;;
+        firewalld)
+            if [ "$EUID" -eq 0 ]; then
+                if systemctl is-active --quiet firewalld; then
+                    print_info "Firewalld is active. Opening port $PORT..."
+                    firewall-cmd --permanent --add-port=$PORT/tcp >/dev/null 2>&1
+                    firewall-cmd --reload >/dev/null 2>&1
+                    if [ $? -eq 0 ]; then
+                        print_success "Port $PORT opened in firewalld"
+                    else
+                        print_error "Failed to open port $PORT in firewalld"
+                        return 1
+                    fi
+                else
+                    print_warning "Firewalld is installed but not active"
+                    if confirm_action "Do you want to start firewalld and open port $PORT?" "Y"; then
+                        systemctl start firewalld >/dev/null 2>&1
+                        systemctl enable firewalld >/dev/null 2>&1
+                        firewall-cmd --permanent --add-port=$PORT/tcp >/dev/null 2>&1
+                        firewall-cmd --reload >/dev/null 2>&1
+                        print_success "Firewalld started and port $PORT opened"
+                    else
+                        print_warning "Firewalld not started. Port $PORT may not be accessible."
+                        return 0
+                    fi
+                fi
+            else
+                if command_exists sudo; then
+                    if sudo systemctl is-active --quiet firewalld; then
+                        print_info "Firewalld is active. Opening port $PORT..."
+                        sudo firewall-cmd --permanent --add-port=$PORT/tcp >/dev/null 2>&1
+                        sudo firewall-cmd --reload >/dev/null 2>&1
+                        if [ $? -eq 0 ]; then
+                            print_success "Port $PORT opened in firewalld"
+                        else
+                            print_error "Failed to open port $PORT in firewalld"
+                            return 1
+                        fi
+                    else
+                        print_warning "Firewalld is installed but not active"
+                        if confirm_action "Do you want to start firewalld and open port $PORT?" "Y"; then
+                            sudo systemctl start firewalld >/dev/null 2>&1
+                            sudo systemctl enable firewalld >/dev/null 2>&1
+                            sudo firewall-cmd --permanent --add-port=$PORT/tcp >/dev/null 2>&1
+                            sudo firewall-cmd --reload >/dev/null 2>&1
+                            print_success "Firewalld started and port $PORT opened"
+                        else
+                            print_warning "Firewalld not started. Port $PORT may not be accessible."
+                            return 0
+                        fi
+                    fi
+                else
+                    print_error "sudo is required to configure firewalld"
+                    return 1
+                fi
+            fi
+            ;;
+        iptables)
+            print_warning "iptables detected. Manual configuration may be required."
+            print_info "To open port $PORT manually, run:"
+            echo "  iptables -A INPUT -p tcp --dport $PORT -j ACCEPT"
+            echo "  iptables-save > /etc/iptables/rules.v4  # (Debian/Ubuntu)"
+            echo "  service iptables save  # (CentOS/RHEL)"
+            echo ""
+            if confirm_action "Do you want to attempt to open port $PORT with iptables?" "N"; then
+                if [ "$EUID" -eq 0 ]; then
+                    iptables -A INPUT -p tcp --dport $PORT -j ACCEPT 2>/dev/null
+                    if [ $? -eq 0 ]; then
+                        print_success "Port $PORT rule added to iptables"
+                        print_warning "Remember to save iptables rules to make them persistent"
+                    else
+                        print_error "Failed to add iptables rule"
+                        return 1
+                    fi
+                else
+                    if command_exists sudo; then
+                        sudo iptables -A INPUT -p tcp --dport $PORT -j ACCEPT 2>/dev/null
+                        if [ $? -eq 0 ]; then
+                            print_success "Port $PORT rule added to iptables"
+                            print_warning "Remember to save iptables rules to make them persistent"
+                        else
+                            print_error "Failed to add iptables rule"
+                            return 1
+                        fi
+                    else
+                        print_error "sudo is required to configure iptables"
+                        return 1
+                    fi
+                fi
+            fi
+            ;;
+    esac
+    
+    echo ""
+    return 0
 }
 
 # ============================================================================
@@ -328,7 +504,7 @@ install_docker_compose() {
         if test_docker_compose "docker compose"; then
             local COMPOSE_VERSION=$(docker compose version | awk '{print $4}')
             print_success "Docker Compose installed successfully (version: $COMPOSE_VERSION) - v2 plugin"
-            DOCKER_COMPOSE_CMD="docker compose"
+        DOCKER_COMPOSE_CMD="docker compose"
             return 0
         fi
     fi
@@ -361,7 +537,7 @@ install_docker_compose() {
             if test_docker_compose "docker-compose"; then
                 local COMPOSE_VERSION=$(docker-compose --version | awk '{print $3}' | sed 's/,//')
                 print_success "Docker Compose v1 now works with python3-distutils"
-                DOCKER_COMPOSE_CMD="docker-compose"
+        DOCKER_COMPOSE_CMD="docker-compose"
                 return 0
             fi
         fi
@@ -431,7 +607,7 @@ test_docker_compose() {
         if echo "$output" | grep -q "ModuleNotFoundError: No module named 'distutils'"; then
             print_error "docker-compose v1 is incompatible with Python 3.12 (distutils removed)"
             print_warning "docker-compose v1 requires distutils which was removed in Python 3.12"
-            echo ""
+    echo ""
             print_info "Solutions:"
             echo "  1. Install docker-compose-plugin (v2) - Recommended"
             echo "  2. Install python3-distutils as a workaround for v1"
@@ -594,10 +770,10 @@ check_prerequisites() {
             print_error "Docker Compose is required. Please install it first." >&2
             return 1
         fi
-    fi
-    
-    # Check if Docker is running
-    if docker info >/dev/null 2>&1; then
+fi
+
+# Check if Docker is running
+if docker info >/dev/null 2>&1; then
         print_success "Docker daemon is running" >&2
     else
         print_error "Docker daemon is not running" >&2
@@ -627,8 +803,8 @@ install_prerequisites() {
     print_header "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     print_header "Install Prerequisites"
     print_header "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo ""
-    
+echo ""
+
     check_prerequisites
 }
 
@@ -643,27 +819,27 @@ create_configuration() {
     echo ""
     
     # Check if .env already exists
-    if [ -f .env ]; then
-        print_warning "A .env file already exists!"
-        echo ""
+if [ -f .env ]; then
+    print_warning "A .env file already exists!"
+    echo ""
         if ! confirm_action "Do you want to overwrite it?" "N"; then
-            print_info "Keeping existing .env file"
-            SKIP_ENV_CREATION=true
+        print_info "Keeping existing .env file"
+        SKIP_ENV_CREATION=true
             return 0
-        fi
+    fi
         # Create backup
         BACKUP_FILE=".env.backup.$(date +%Y%m%d_%H%M%S)"
         cp .env "$BACKUP_FILE" 2>/dev/null && \
             print_success "Backup created: $BACKUP_FILE" || \
             print_warning "Could not create backup"
-        echo ""
+    echo ""
     fi
     
     SKIP_ENV_CREATION=false
     
     print_info "We'll ask you a few questions to configure Aether Dashboard"
     echo ""
-    
+
     # Server Configuration
     print_header "Server Configuration"
     echo "────────────────────────────────────────────────────────────────────────────"
@@ -734,6 +910,23 @@ create_configuration() {
             echo -e "${YELLOW}Note:${NC} DNS propagation can take a few minutes to 24 hours."
             echo ""
             read -p "Press Enter once you've configured the DNS record..."
+            echo ""
+            print_warning "IMPORTANT: Cloudflare SSL/TLS Configuration"
+            echo "────────────────────────────────────────────────────────────────────────────"
+            echo ""
+            echo "Since your origin server runs on HTTP (port $PORT), you need to configure"
+            echo "Cloudflare SSL/TLS mode to 'Flexible':"
+            echo ""
+            echo "Steps to configure SSL/TLS in Cloudflare:"
+            echo "  1. Go to SSL/TLS in your Cloudflare dashboard"
+            echo "  2. Set encryption mode to: ${GREEN}Flexible${NC}"
+            echo "     (This allows HTTPS to Cloudflare, HTTP to origin)"
+            echo "  3. Save the settings"
+            echo ""
+            echo -e "${YELLOW}Why Flexible?${NC} Your origin server runs on HTTP port $PORT."
+            echo "Cloudflare will handle HTTPS termination and connect to your server via HTTP."
+            echo ""
+            read -p "Press Enter once you've configured SSL/TLS mode to Flexible..."
             
             # Ask if they want to use HTTPS
             if confirm_action "Do you want to use HTTPS (requires Cloudflare proxy enabled)?" "Y"; then
@@ -770,6 +963,24 @@ create_configuration() {
             echo "You need to configure a DNS A record in Cloudflare pointing to your VPS IP."
             echo ""
             read -p "Enter your VPS IP address: " VPS_IP
+            echo ""
+            print_warning "IMPORTANT: Cloudflare SSL/TLS Configuration"
+            echo "────────────────────────────────────────────────────────────────────────────"
+            echo ""
+            echo "Since your origin server runs on HTTP (port $PORT), you need to configure"
+            echo "Cloudflare SSL/TLS mode to 'Flexible':"
+            echo ""
+            echo "Steps to configure SSL/TLS in Cloudflare:"
+            echo "  1. Go to SSL/TLS in your Cloudflare dashboard"
+            echo "  2. Set encryption mode to: ${GREEN}Flexible${NC}"
+            echo "     (This allows HTTPS to Cloudflare, HTTP to origin)"
+            echo "  3. Save the settings"
+            echo ""
+            echo -e "${YELLOW}Why Flexible?${NC} Your origin server runs on HTTP port $PORT."
+            echo "Cloudflare will handle HTTPS termination and connect to your server via HTTP."
+            echo ""
+            read -p "Press Enter once you've configured SSL/TLS mode to Flexible..."
+            echo ""
             if confirm_action "Do you want to use HTTPS?" "Y"; then
                 FRONTEND_URL="https://$SUBDOMAIN"
             else
@@ -784,6 +995,31 @@ create_configuration() {
             done
             print_success "Frontend URL set to: $FRONTEND_URL"
         fi
+    fi
+    echo ""
+    
+    # Firewall Configuration
+    print_header "Firewall Configuration"
+    echo "────────────────────────────────────────────────────────────────────────────"
+    print_info "To allow external access, port $PORT needs to be open in your firewall."
+    echo ""
+    
+    # Force flush before showing prompt
+    sync 2>/dev/null || true
+    
+    if confirm_action "Do you want to configure firewall to allow port $PORT?" "Y"; then
+        if configure_firewall "$PORT"; then
+            print_success "Firewall configured successfully"
+        else
+            print_warning "Firewall configuration had issues. You may need to configure it manually."
+        fi
+    else
+        print_warning "Firewall configuration skipped."
+        echo ""
+        print_info "To manually open port $PORT:"
+        echo "  - UFW: sudo ufw allow $PORT/tcp"
+        echo "  - Firewalld: sudo firewall-cmd --permanent --add-port=$PORT/tcp && sudo firewall-cmd --reload"
+        echo "  - iptables: sudo iptables -A INPUT -p tcp --dport $PORT -j ACCEPT"
     fi
     echo ""
     
@@ -817,7 +1053,7 @@ create_configuration() {
         print_info "No admin email configured. You can set it later in the .env file."
     fi
     echo ""
-    
+
     # Database Configuration
     print_header "Database Configuration"
     echo "────────────────────────────────────────────────────────────────────────────"
@@ -837,7 +1073,7 @@ create_configuration() {
     done
     print_success "Database configuration set"
     echo ""
-    
+
     # Redis Configuration
     print_header "Redis Configuration"
     echo "────────────────────────────────────────────────────────────────────────────"
@@ -854,7 +1090,7 @@ create_configuration() {
         print_info "Redis disabled"
     fi
     echo ""
-    
+
     # Pterodactyl Configuration
     print_header "Pterodactyl Panel Configuration"
     echo "────────────────────────────────────────────────────────────────────────────"
@@ -876,7 +1112,7 @@ create_configuration() {
     
     print_success "Pterodactyl configuration set"
     echo ""
-    
+
     # Revenue System Configuration
     print_header "Revenue System Configuration"
     echo "────────────────────────────────────────────────────────────────────────────"
@@ -927,12 +1163,12 @@ create_configuration() {
     
     print_success "Revenue system configuration set"
     echo ""
-    
+
     # Create .env file
     print_header "Creating Configuration File"
     echo "────────────────────────────────────────────────────────────────────────────"
     echo ""
-    
+
     cat > .env << EOF
 # Aether Dashboard Configuration
 # Generated by setup.sh on $(date)
@@ -991,7 +1227,7 @@ REFERRAL_COMMISSION=10
 DAILY_LOGIN_ENABLED=$DAILY_LOGIN_ENABLED
 DAILY_LOGIN_COINS=25
 EOF
-    
+
     print_success ".env file created successfully"
     echo ""
 }
@@ -1031,18 +1267,18 @@ build_and_start() {
         print_error "Failed to build Docker images"
         return 1
     fi
-    
-    echo ""
-    print_info "Starting services..."
+
+echo ""
+print_info "Starting services..."
     if $DOCKER_COMPOSE_CMD up -d; then
         print_success "Services started successfully"
     else
         print_error "Failed to start services"
         return 1
     fi
-    
-    echo ""
-    print_info "Waiting for services to be ready..."
+
+echo ""
+print_info "Waiting for services to be ready..."
     sleep 5
 }
 
@@ -1066,8 +1302,8 @@ run_migrations() {
         print_error "Docker Compose command not set. Please run prerequisite check first."
         return 1
     fi
-    
-    print_info "Waiting for database to be ready..."
+
+print_info "Waiting for database to be ready..."
     
     # Wait for database with retries
     local db_ready=false
@@ -1088,14 +1324,14 @@ run_migrations() {
     
     print_success "Database is ready"
     sleep 2
+
+print_info "Running database migrations..."
     
-    print_info "Running database migrations..."
-    
-    if $DOCKER_COMPOSE_CMD exec -T aether-dashboard npm run migrate >/dev/null 2>&1; then
-        print_success "Database migrations completed"
+if $DOCKER_COMPOSE_CMD exec -T aether-dashboard npm run migrate >/dev/null 2>&1; then
+    print_success "Database migrations completed"
         return 0
-    else
-        print_warning "Migration command returned an error, but this might be normal if migrations already ran"
+else
+    print_warning "Migration command returned an error, but this might be normal if migrations already ran"
         return 0  # Don't fail if migrations already ran
     fi
 }
@@ -1108,7 +1344,7 @@ verify_installation() {
     print_header "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     print_header "Verifying Installation"
     print_header "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo ""
+echo ""
     
     # Verify docker-compose command works
     if [ -z "$DOCKER_COMPOSE_CMD" ]; then
@@ -1137,13 +1373,32 @@ verify_installation() {
     local PORT=$(grep "^PORT=" .env 2>/dev/null | cut -d'=' -f2 | tr -d '"' || echo "5000")
     PORT=${PORT:-5000}
     
+    # Verify port is listening
+    print_info "Verifying port $PORT is listening..."
+    if command_exists netstat; then
+        if netstat -tuln 2>/dev/null | grep -q ":$PORT "; then
+            print_success "Port $PORT is listening"
+        else
+            print_warning "Port $PORT may not be listening (netstat check failed)"
+        fi
+    elif command_exists ss; then
+        if ss -tuln 2>/dev/null | grep -q ":$PORT "; then
+            print_success "Port $PORT is listening"
+        else
+            print_warning "Port $PORT may not be listening (ss check failed)"
+        fi
+    else
+        print_warning "Cannot verify port (netstat/ss not available)"
+    fi
+    echo ""
+    
     print_info "Testing health endpoint..."
     local max_attempts=30
     local attempt=1
     
     while [ $attempt -le $max_attempts ]; do
         if curl -f -s "http://localhost:$PORT/health" >/dev/null 2>&1; then
-            print_success "Aether Dashboard is running and healthy!"
+    print_success "Aether Dashboard is running and healthy!"
             return 0
         fi
         if [ $attempt -lt $max_attempts ]; then
@@ -1156,7 +1411,7 @@ verify_installation() {
     printf "\r"
     if [ "$all_healthy" = true ]; then
         print_warning "Health check failed, but services appear to be running"
-        print_info "Wait a few more seconds and check: http://localhost:$PORT/health"
+    print_info "Wait a few more seconds and check: http://localhost:$PORT/health"
         return 0
     else
         print_error "Some services failed to start"
@@ -1169,21 +1424,21 @@ verify_installation() {
 # ============================================================================
 
 show_summary() {
-    echo ""
+echo ""
     print_header "╔══════════════════════════════════════════════════════════╗"
     print_header "║              Installation Complete! 🎉                  ║"
     print_header "╚══════════════════════════════════════════════════════════╝"
-    echo ""
+echo ""
     
     print_header "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     print_header "Installation Summary"
     print_header "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo ""
+echo ""
     echo -e "  ${BLUE}Configuration File:${NC}  .env"
     if [ -n "$BACKUP_FILE" ] && [ -f "$BACKUP_FILE" ]; then
         echo -e "  ${BLUE}Backup File:${NC}          $BACKUP_FILE"
     fi
-    echo ""
+echo ""
     
     print_header "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     print_header "Access Your Aether Dashboard"
@@ -1214,28 +1469,78 @@ show_summary() {
     print_header "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     print_header "Useful Commands"
     print_header "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo ""
-    echo "  View logs:        $DOCKER_COMPOSE_CMD logs -f aether-dashboard"
-    echo "  Stop services:    $DOCKER_COMPOSE_CMD down"
-    echo "  Restart:          $DOCKER_COMPOSE_CMD restart"
-    echo "  View status:      $DOCKER_COMPOSE_CMD ps"
-    echo ""
+echo ""
+echo "  View logs:        $DOCKER_COMPOSE_CMD logs -f aether-dashboard"
+echo "  Stop services:    $DOCKER_COMPOSE_CMD down"
+echo "  Restart:          $DOCKER_COMPOSE_CMD restart"
+echo "  View status:      $DOCKER_COMPOSE_CMD ps"
+echo ""
     
     print_header "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     print_header "Next Steps"
     print_header "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo ""
+echo ""
     if [ -n "$FRONTEND_URL" ]; then
         echo "  1. Open $FRONTEND_URL in your browser"
     else
-        echo "  1. Open http://localhost:$PORT in your browser"
+echo "  1. Open http://localhost:$PORT in your browser"
     fi
-    echo "  2. Register your first admin account"
-    echo "  3. Configure your Pterodactyl Panel integration"
-    echo "  4. Start managing game servers!"
+echo ""
+echo "  2. Register your first admin account"
+echo ""
+echo "  3. Configure your Pterodactyl Panel integration"
+echo ""
+echo "  4. Start managing game servers!"
+echo ""
+    
+    print_header "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    print_header "Troubleshooting"
+    print_header "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo ""
-    echo -e "${GREEN}Enjoy using Aether Dashboard! 🚀${NC}"
+    
+    local VPS_IP=$(get_vps_ip 2>/dev/null || echo "YOUR_VPS_IP")
+    
+    echo -e "${YELLOW}If you cannot access the dashboard:${NC}"
     echo ""
+    echo "1. Test direct access to your server:"
+    echo "   curl http://$VPS_IP:$PORT/health"
+    echo ""
+    echo "2. Check if port $PORT is open in firewall:"
+    echo "   - UFW: sudo ufw status | grep $PORT"
+    echo "   - Firewalld: sudo firewall-cmd --list-ports"
+    echo "   - iptables: sudo iptables -L -n | grep $PORT"
+    echo ""
+    echo "3. Verify Docker container is running:"
+    echo "   docker ps | grep aether-dashboard"
+    echo ""
+    echo "4. Check container logs:"
+    echo "   docker logs aether-dashboard"
+    echo ""
+    
+    if [[ "$FRONTEND_URL" =~ ^https:// ]]; then
+        echo -e "${YELLOW}If using Cloudflare with HTTPS:${NC}"
+        echo ""
+        echo "1. Verify Cloudflare SSL/TLS mode is set to 'Flexible':"
+        echo "   - Go to Cloudflare Dashboard > SSL/TLS"
+        echo "   - Set encryption mode to 'Flexible'"
+        echo "   - This allows HTTPS to Cloudflare, HTTP to origin (port $PORT)"
+        echo ""
+        echo "2. Verify DNS record is proxied (orange cloud):"
+        echo "   - Go to Cloudflare Dashboard > DNS > Records"
+        echo "   - Ensure your A record has orange cloud enabled"
+        echo ""
+        echo "3. Test origin server directly:"
+        echo "   curl http://$VPS_IP:$PORT/health"
+        echo "   (Should return: {\"status\":\"ok\",...})"
+        echo ""
+    fi
+    
+    echo "For more help, check the logs:"
+    echo "  $DOCKER_COMPOSE_CMD logs -f aether-dashboard"
+    echo ""
+    echo ""
+echo -e "${GREEN}Enjoy using Aether Dashboard! 🚀${NC}"
+echo ""
 }
 
 # ============================================================================
