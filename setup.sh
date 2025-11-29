@@ -222,13 +222,17 @@ install_docker_compose() {
     
     case $OS in
         ubuntu|debian)
-            print_info "Installing Docker Compose plugin..."
+            print_info "Installing Docker Compose plugin (v2) - Recommended..."
             if [ "$EUID" -eq 0 ]; then
                 apt-get update -qq >/dev/null 2>&1
+                # Remove old docker-compose v1 if installed
+                apt-get remove -y docker-compose >/dev/null 2>&1 || true
                 apt-get install -y docker-compose-plugin >/dev/null 2>&1
             else
                 if command_exists sudo; then
                     sudo apt-get update -qq >/dev/null 2>&1
+                    # Remove old docker-compose v1 if installed
+                    sudo apt-get remove -y docker-compose >/dev/null 2>&1 || true
                     sudo apt-get install -y docker-compose-plugin >/dev/null 2>&1
                 else
                     print_error "sudo is required but not installed."
@@ -237,12 +241,18 @@ install_docker_compose() {
             fi
             ;;
         centos|rhel|fedora)
-            print_info "Installing Docker Compose plugin..."
+            print_info "Installing Docker Compose plugin (v2) - Recommended..."
             if [ "$EUID" -eq 0 ]; then
+                # Remove old docker-compose v1 if installed
+                yum remove -y docker-compose >/dev/null 2>&1 || \
+                dnf remove -y docker-compose >/dev/null 2>&1 || true
                 yum install -y docker-compose-plugin >/dev/null 2>&1 || \
                 dnf install -y docker-compose-plugin >/dev/null 2>&1
             else
                 if command_exists sudo; then
+                    # Remove old docker-compose v1 if installed
+                    sudo yum remove -y docker-compose >/dev/null 2>&1 || \
+                    sudo dnf remove -y docker-compose >/dev/null 2>&1 || true
                     sudo yum install -y docker-compose-plugin >/dev/null 2>&1 || \
                     sudo dnf install -y docker-compose-plugin >/dev/null 2>&1
                 else
@@ -252,7 +262,7 @@ install_docker_compose() {
             fi
             ;;
         arch)
-            print_info "Installing Docker Compose plugin..."
+            print_info "Installing Docker Compose plugin (v2)..."
             if [ "$EUID" -eq 0 ]; then
                 pacman -S --noconfirm docker-compose
             else
@@ -265,8 +275,8 @@ install_docker_compose() {
             fi
             ;;
         *)
-            # Fallback: Install standalone docker-compose
-            print_info "Installing standalone Docker Compose..."
+            # Fallback: Install standalone docker-compose v2
+            print_info "Installing standalone Docker Compose v2..."
             local COMPOSE_VERSION="v2.24.0"
             if command_exists curl; then
                 curl -L "https://github.com/docker/compose/releases/download/${COMPOSE_VERSION}/docker-compose-$(uname -s)-$(uname -m)" \
@@ -279,22 +289,53 @@ install_docker_compose() {
             ;;
     esac
     
-    # Verify installation
+    # Verify installation - Test that it actually works
     sleep 2
     if docker compose version >/dev/null 2>&1; then
-        local COMPOSE_VERSION=$(docker compose version | awk '{print $4}')
-        print_success "Docker Compose installed successfully (version: $COMPOSE_VERSION)"
-        DOCKER_COMPOSE_CMD="docker compose"
-        return 0
-    elif command_exists docker-compose; then
-        local COMPOSE_VERSION=$(docker-compose --version | awk '{print $3}' | sed 's/,//')
-        print_success "Docker Compose installed successfully (version: $COMPOSE_VERSION)"
-        DOCKER_COMPOSE_CMD="docker-compose"
-        return 0
-    else
-        print_error "Docker Compose installation failed"
-        return 1
+        if test_docker_compose "docker compose"; then
+            local COMPOSE_VERSION=$(docker compose version | awk '{print $4}')
+            print_success "Docker Compose installed successfully (version: $COMPOSE_VERSION) - v2 plugin"
+            DOCKER_COMPOSE_CMD="docker compose"
+            return 0
+        fi
     fi
+    
+    # Fallback check for docker-compose v1 (should not happen with our installation)
+    if command_exists docker-compose; then
+        local test_result=$(test_docker_compose "docker-compose")
+        local test_exit=$?
+        
+        if [ $test_exit -eq 0 ]; then
+            local COMPOSE_VERSION=$(docker-compose --version | awk '{print $3}' | sed 's/,//')
+            print_success "Docker Compose installed successfully (version: $COMPOSE_VERSION) - v1"
+            DOCKER_COMPOSE_CMD="docker-compose"
+            return 0
+        elif [ $test_exit -eq 2 ]; then
+            print_error "docker-compose v1 is incompatible with Python 3.12"
+            print_info "Installing python3-distutils as workaround..."
+            
+            if [ "$EUID" -eq 0 ]; then
+                apt-get install -y python3-distutils >/dev/null 2>&1
+            else
+                if command_exists sudo; then
+                    sudo apt-get install -y python3-distutils >/dev/null 2>&1
+                else
+                    print_error "sudo is required but not installed."
+                    return 1
+                fi
+            fi
+            
+            if test_docker_compose "docker-compose"; then
+                local COMPOSE_VERSION=$(docker-compose --version | awk '{print $3}' | sed 's/,//')
+                print_success "Docker Compose v1 now works with python3-distutils"
+                DOCKER_COMPOSE_CMD="docker-compose"
+                return 0
+            fi
+        fi
+    fi
+    
+    print_error "Docker Compose installation failed or incompatible"
+    return 1
 }
 
 start_docker_daemon() {
@@ -335,6 +376,42 @@ start_docker_daemon() {
 # Prerequisite Checking Functions
 # ============================================================================
 
+test_docker_compose() {
+    local cmd=$1
+    
+    # Test if the command actually works
+    if [ "$cmd" = "docker compose" ]; then
+        if docker compose version >/dev/null 2>&1; then
+            return 0
+        fi
+        return 1
+    elif [ "$cmd" = "docker-compose" ]; then
+        # Test docker-compose v1 - it might fail with distutils error
+        local output=$(docker-compose --version 2>&1)
+        local exit_code=$?
+        
+        if [ $exit_code -eq 0 ]; then
+            return 0
+        fi
+        
+        # Check for distutils error (Python 3.12 compatibility issue)
+        if echo "$output" | grep -q "ModuleNotFoundError: No module named 'distutils'"; then
+            print_error "docker-compose v1 is incompatible with Python 3.12 (distutils removed)"
+            print_warning "docker-compose v1 requires distutils which was removed in Python 3.12"
+            echo ""
+            print_info "Solutions:"
+            echo "  1. Install docker-compose-plugin (v2) - Recommended"
+            echo "  2. Install python3-distutils as a workaround for v1"
+            echo ""
+            return 2  # Special return code for distutils error
+        fi
+        
+        return 1
+    fi
+    
+    return 1
+}
+
 check_prerequisites() {
     print_header "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     print_header "Checking Prerequisites"
@@ -362,18 +439,89 @@ check_prerequisites() {
         fi
     fi
     
-    # Check Docker Compose
-    if command_exists docker-compose || docker compose version >/dev/null 2>&1; then
-        if docker compose version >/dev/null 2>&1; then
+    # Check Docker Compose - Prefer v2 plugin over v1
+    local compose_available=false
+    local compose_cmd=""
+    
+    # First, try docker compose (v2 plugin)
+    if docker compose version >/dev/null 2>&1; then
+        if test_docker_compose "docker compose"; then
             local COMPOSE_VERSION=$(docker compose version | awk '{print $4}')
-            print_success "Docker Compose is installed (version: $COMPOSE_VERSION)"
+            print_success "Docker Compose is installed (version: $COMPOSE_VERSION) - v2 plugin"
             DOCKER_COMPOSE_CMD="docker compose"
-        else
-            local COMPOSE_VERSION=$(docker-compose --version | awk '{print $3}' | sed 's/,//')
-            print_success "Docker Compose is installed (version: $COMPOSE_VERSION)"
-            DOCKER_COMPOSE_CMD="docker-compose"
+            compose_available=true
         fi
-    else
+    fi
+    
+    # If v2 not available, try docker-compose (v1)
+    if [ "$compose_available" = false ] && command_exists docker-compose; then
+        local test_result=$(test_docker_compose "docker-compose")
+        local test_exit=$?
+        
+        if [ $test_exit -eq 0 ]; then
+            local COMPOSE_VERSION=$(docker-compose --version | awk '{print $3}' | sed 's/,//')
+            print_success "Docker Compose is installed (version: $COMPOSE_VERSION) - v1"
+            DOCKER_COMPOSE_CMD="docker-compose"
+            compose_available=true
+        elif [ $test_exit -eq 2 ]; then
+            # distutils error detected
+            echo ""
+            print_warning "docker-compose v1 is installed but incompatible with Python 3.12"
+            echo ""
+            if confirm_action "Do you want to install docker-compose-plugin (v2) instead? (Recommended)" "Y"; then
+                # Remove old docker-compose v1
+                if [ "$EUID" -eq 0 ]; then
+                    apt-get remove -y docker-compose >/dev/null 2>&1 || true
+                else
+                    if command_exists sudo; then
+                        sudo apt-get remove -y docker-compose >/dev/null 2>&1 || true
+                    fi
+                fi
+                
+                if install_docker_compose; then
+                    print_success "Docker Compose v2 installed successfully"
+                    compose_available=true
+                else
+                    print_error "Failed to install docker-compose-plugin"
+                    echo ""
+                    if confirm_action "Install python3-distutils as a workaround for docker-compose v1?" "N"; then
+                        if [ "$EUID" -eq 0 ]; then
+                            apt-get install -y python3-distutils >/dev/null 2>&1
+                        else
+                            if command_exists sudo; then
+                                sudo apt-get install -y python3-distutils >/dev/null 2>&1
+                            fi
+                        fi
+                        if test_docker_compose "docker-compose"; then
+                            DOCKER_COMPOSE_CMD="docker-compose"
+                            compose_available=true
+                        fi
+                    fi
+                fi
+            elif confirm_action "Install python3-distutils as a workaround?" "N"; then
+                if [ "$EUID" -eq 0 ]; then
+                    apt-get install -y python3-distutils >/dev/null 2>&1
+                else
+                    if command_exists sudo; then
+                        sudo apt-get install -y python3-distutils >/dev/null 2>&1
+                    fi
+                fi
+                if test_docker_compose "docker-compose"; then
+                    local COMPOSE_VERSION=$(docker-compose --version | awk '{print $3}' | sed 's/,//')
+                    print_success "Docker Compose v1 now works with python3-distutils"
+                    DOCKER_COMPOSE_CMD="docker-compose"
+                    compose_available=true
+                fi
+            else
+                print_error "Docker Compose is required but not working."
+                print_info "Please install docker-compose-plugin manually:"
+                echo "  apt-get install docker-compose-plugin"
+                return 1
+            fi
+        fi
+    fi
+    
+    if [ "$compose_available" = false ]; then
         print_error "Docker Compose is not installed"
         echo ""
         if confirm_action "Do you want to install Docker Compose automatically?" "Y"; then
@@ -801,6 +949,19 @@ build_and_start() {
         return 1
     fi
     
+    # Verify docker-compose command works before using it
+    if [ -z "$DOCKER_COMPOSE_CMD" ]; then
+        print_error "Docker Compose command not set. Please run prerequisite check first."
+        return 1
+    fi
+    
+    # Test the command one more time before using it
+    if ! test_docker_compose "$DOCKER_COMPOSE_CMD" >/dev/null 2>&1; then
+        print_error "Docker Compose command is not working: $DOCKER_COMPOSE_CMD"
+        print_info "Please run 'Install Prerequisites Only' to fix this issue."
+        return 1
+    fi
+    
     print_info "Building Docker images..."
     if $DOCKER_COMPOSE_CMD build; then
         print_success "Docker images built successfully"
@@ -835,6 +996,12 @@ run_migrations() {
     
     if [ ! -f .env ]; then
         print_error ".env file not found. Please run configuration first."
+        return 1
+    fi
+    
+    # Verify docker-compose command works
+    if [ -z "$DOCKER_COMPOSE_CMD" ]; then
+        print_error "Docker Compose command not set. Please run prerequisite check first."
         return 1
     fi
     
@@ -880,6 +1047,12 @@ verify_installation() {
     print_header "Verifying Installation"
     print_header "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo ""
+    
+    # Verify docker-compose command works
+    if [ -z "$DOCKER_COMPOSE_CMD" ]; then
+        print_error "Docker Compose command not set. Please run prerequisite check first."
+        return 1
+    fi
     
     print_info "Checking service status..."
     
