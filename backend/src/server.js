@@ -119,9 +119,10 @@ app.use('/api/*', (req, res) => {
   res.status(404).json({ error: 'Route not found' });
 });
 
-app.listen(PORT, () => {
+app.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 Server running on port ${PORT}`);
   console.log(`📊 Environment: ${process.env.NODE_ENV || 'development'}`);
+  console.log(`🌐 Server bound to 0.0.0.0 (accessible from all network interfaces)`);
 });
 
 module.exports = app;

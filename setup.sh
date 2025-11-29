@@ -65,6 +65,303 @@ validate_port() {
     fi
 }
 
+# Function to detect OS
+detect_os() {
+    if [ -f /etc/os-release ]; then
+        . /etc/os-release
+        OS=$ID
+        OS_VERSION=$VERSION_ID
+    elif [ -f /etc/redhat-release ]; then
+        OS="rhel"
+        OS_VERSION=$(cat /etc/redhat-release | sed -E 's/.*release ([0-9]+).*/\1/')
+    elif [ -f /etc/arch-release ]; then
+        OS="arch"
+        OS_VERSION=""
+    else
+        OS="unknown"
+        OS_VERSION=""
+    fi
+    echo "$OS"
+}
+
+# Function to get VPS IP address
+get_vps_ip() {
+    # Try multiple methods to get the public IP
+    if command_exists curl; then
+        IP=$(curl -s https://api.ipify.org 2>/dev/null || curl -s https://ifconfig.me 2>/dev/null || curl -s https://icanhazip.com 2>/dev/null)
+        if [ -n "$IP" ]; then
+            echo "$IP"
+            return 0
+        fi
+    fi
+    
+    # Fallback to local network interfaces
+    if command_exists ip; then
+        IP=$(ip route get 8.8.8.8 2>/dev/null | awk '{print $7; exit}' | head -1)
+        if [ -n "$IP" ] && [ "$IP" != "127.0.0.1" ]; then
+            echo "$IP"
+            return 0
+        fi
+    fi
+    
+    # Last resort: check hostname -I
+    if command_exists hostname; then
+        IP=$(hostname -I 2>/dev/null | awk '{print $1}')
+        if [ -n "$IP" ] && [ "$IP" != "127.0.0.1" ]; then
+            echo "$IP"
+            return 0
+        fi
+    fi
+    
+    echo ""
+    return 1
+}
+
+# Function to install Docker
+install_docker() {
+    print_info "Installing Docker..."
+    
+    OS=$(detect_os)
+    
+    case $OS in
+        ubuntu|debian)
+            print_info "Detected Ubuntu/Debian. Installing Docker..."
+            if command_exists curl; then
+                curl -fsSL https://get.docker.com -o get-docker.sh
+                sh get-docker.sh
+                rm -f get-docker.sh
+            else
+                print_error "curl is required but not installed. Please install curl first."
+                return 1
+            fi
+            ;;
+        centos|rhel|fedora)
+            print_info "Detected CentOS/RHEL/Fedora. Installing Docker..."
+            if command_exists curl; then
+                curl -fsSL https://get.docker.com -o get-docker.sh
+                sh get-docker.sh
+                rm -f get-docker.sh
+            else
+                print_error "curl is required but not installed. Please install curl first."
+                return 1
+            fi
+            ;;
+        arch)
+            print_info "Detected Arch Linux. Installing Docker..."
+            if command_exists pacman; then
+                pacman -S --noconfirm docker
+            else
+                print_error "pacman is required but not found."
+                return 1
+            fi
+            ;;
+        *)
+            print_error "Unsupported OS: $OS"
+            print_info "Please install Docker manually: https://docs.docker.com/engine/install/"
+            return 1
+            ;;
+    esac
+    
+    # Start and enable Docker service
+    if command_exists systemctl; then
+        print_info "Starting Docker service..."
+        systemctl start docker
+        systemctl enable docker
+    fi
+    
+    # Add current user to docker group (if not root)
+    if [ "$EUID" -ne 0 ]; then
+        print_info "Adding current user to docker group..."
+        if command_exists usermod; then
+            usermod -aG docker "$USER"
+            print_warning "You may need to log out and log back in for group changes to take effect."
+        fi
+    fi
+    
+    # Wait for Docker to be ready
+    sleep 3
+    
+    # Verify installation
+    if docker --version >/dev/null 2>&1; then
+        DOCKER_VERSION=$(docker --version | awk '{print $3}' | sed 's/,//')
+        print_success "Docker installed successfully (version: $DOCKER_VERSION)"
+        return 0
+    else
+        print_error "Docker installation failed"
+        return 1
+    fi
+}
+
+# Function to install Docker Compose
+install_docker_compose() {
+    print_info "Installing Docker Compose..."
+    
+    OS=$(detect_os)
+    
+    case $OS in
+        ubuntu|debian)
+            print_info "Installing Docker Compose plugin..."
+            if [ "$EUID" -eq 0 ]; then
+                apt-get update -qq >/dev/null 2>&1
+                apt-get install -y docker-compose-plugin >/dev/null 2>&1
+            else
+                if command_exists sudo; then
+                    sudo apt-get update -qq >/dev/null 2>&1
+                    sudo apt-get install -y docker-compose-plugin >/dev/null 2>&1
+                else
+                    print_error "sudo is required but not installed."
+                    return 1
+                fi
+            fi
+            ;;
+        centos|rhel|fedora)
+            print_info "Installing Docker Compose plugin..."
+            if [ "$EUID" -eq 0 ]; then
+                yum install -y docker-compose-plugin >/dev/null 2>&1 || dnf install -y docker-compose-plugin >/dev/null 2>&1
+            else
+                if command_exists sudo; then
+                    sudo yum install -y docker-compose-plugin >/dev/null 2>&1 || sudo dnf install -y docker-compose-plugin >/dev/null 2>&1
+                else
+                    print_error "sudo is required but not installed."
+                    return 1
+                fi
+            fi
+            ;;
+        arch)
+            print_info "Installing Docker Compose plugin..."
+            if [ "$EUID" -eq 0 ]; then
+                pacman -S --noconfirm docker-compose
+            else
+                if command_exists sudo; then
+                    sudo pacman -S --noconfirm docker-compose
+                else
+                    print_error "sudo is required but not installed."
+                    return 1
+                fi
+            fi
+            ;;
+        *)
+            # Fallback: Install standalone docker-compose
+            print_info "Installing standalone Docker Compose..."
+            COMPOSE_VERSION="v2.24.0"
+            if command_exists curl; then
+                curl -L "https://github.com/docker/compose/releases/download/${COMPOSE_VERSION}/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+                chmod +x /usr/local/bin/docker-compose
+            else
+                print_error "curl is required but not installed."
+                return 1
+            fi
+            ;;
+    esac
+    
+    # Verify installation
+    sleep 2
+    if docker compose version >/dev/null 2>&1; then
+        COMPOSE_VERSION=$(docker compose version | awk '{print $4}')
+        print_success "Docker Compose installed successfully (version: $COMPOSE_VERSION)"
+        DOCKER_COMPOSE_CMD="docker compose"
+        return 0
+    elif command_exists docker-compose; then
+        COMPOSE_VERSION=$(docker-compose --version | awk '{print $3}' | sed 's/,//')
+        print_success "Docker Compose installed successfully (version: $COMPOSE_VERSION)"
+        DOCKER_COMPOSE_CMD="docker-compose"
+        return 0
+    else
+        print_error "Docker Compose installation failed"
+        return 1
+    fi
+}
+
+# Function to start Docker daemon
+start_docker_daemon() {
+    print_info "Starting Docker daemon..."
+    
+    if command_exists systemctl; then
+        if [ "$EUID" -eq 0 ]; then
+            systemctl start docker
+            systemctl enable docker
+        else
+            if command_exists sudo; then
+                sudo systemctl start docker
+                sudo systemctl enable docker
+            else
+                print_error "sudo is required but not installed."
+                return 1
+            fi
+        fi
+        
+        # Wait for Docker to be ready
+        sleep 3
+        
+        # Verify Docker is running
+        if docker info >/dev/null 2>&1; then
+            print_success "Docker daemon started successfully"
+            return 0
+        else
+            print_error "Failed to start Docker daemon"
+            return 1
+        fi
+    else
+        print_error "systemctl not found. Please start Docker manually."
+        return 1
+    fi
+}
+
+# Function to configure firewall
+configure_firewall() {
+    local PORT=$1
+    
+    if [ -z "$PORT" ]; then
+        PORT=5000
+    fi
+    
+    print_info "Checking firewall configuration..."
+    
+    # Check for UFW (Ubuntu/Debian)
+    if command_exists ufw; then
+        if ufw status | grep -q "Status: active"; then
+            print_info "UFW firewall is active"
+            read -p "Do you want to open port $PORT in UFW? (Y/n): " open_port
+            if [[ ! $open_port =~ ^[Nn]$ ]]; then
+                if [ "$EUID" -eq 0 ]; then
+                    ufw allow $PORT/tcp
+                    print_success "Port $PORT opened in UFW"
+                else
+                    if command_exists sudo; then
+                        sudo ufw allow $PORT/tcp
+                        print_success "Port $PORT opened in UFW"
+                    else
+                        print_warning "Please run manually: sudo ufw allow $PORT/tcp"
+                    fi
+                fi
+            fi
+        fi
+    # Check for firewalld (CentOS/RHEL/Fedora)
+    elif command_exists firewall-cmd; then
+        if systemctl is-active --quiet firewalld 2>/dev/null; then
+            print_info "firewalld is active"
+            read -p "Do you want to open port $PORT in firewalld? (Y/n): " open_port
+            if [[ ! $open_port =~ ^[Nn]$ ]]; then
+                if [ "$EUID" -eq 0 ]; then
+                    firewall-cmd --permanent --add-port=$PORT/tcp
+                    firewall-cmd --reload
+                    print_success "Port $PORT opened in firewalld"
+                else
+                    if command_exists sudo; then
+                        sudo firewall-cmd --permanent --add-port=$PORT/tcp
+                        sudo firewall-cmd --reload
+                        print_success "Port $PORT opened in firewalld"
+                    else
+                        print_warning "Please run manually: sudo firewall-cmd --permanent --add-port=$PORT/tcp && sudo firewall-cmd --reload"
+                    fi
+                fi
+            fi
+        fi
+    else
+        print_info "No common firewall detected (ufw/firewalld). You may need to configure your firewall manually."
+    fi
+}
+
 # Step 1: Check prerequisites
 echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
 echo -e "${BLUE}Step 1: Checking Prerequisites${NC}"
@@ -78,11 +375,20 @@ if command_exists docker; then
 else
     print_error "Docker is not installed"
     echo ""
-    echo "Please install Docker first:"
-    echo "  - Linux: https://docs.docker.com/engine/install/"
-    echo "  - macOS: https://docs.docker.com/desktop/install/mac-install/"
-    echo "  - Windows: https://docs.docker.com/desktop/install/windows-install/"
-    exit 1
+    read -p "Do you want to install Docker automatically? (Y/n): " install_docker_choice
+    if [[ ! $install_docker_choice =~ ^[Nn]$ ]]; then
+        if install_docker; then
+            print_success "Docker installation completed"
+        else
+            print_error "Docker installation failed. Please install manually:"
+            echo "  - Linux: https://docs.docker.com/engine/install/"
+            exit 1
+        fi
+    else
+        echo "Please install Docker first:"
+        echo "  - Linux: https://docs.docker.com/engine/install/"
+        exit 1
+    fi
 fi
 
 # Check Docker Compose
@@ -99,9 +405,20 @@ if command_exists docker-compose || docker compose version >/dev/null 2>&1; then
 else
     print_error "Docker Compose is not installed"
     echo ""
-    echo "Please install Docker Compose first:"
-    echo "  https://docs.docker.com/compose/install/"
-    exit 1
+    read -p "Do you want to install Docker Compose automatically? (Y/n): " install_compose_choice
+    if [[ ! $install_compose_choice =~ ^[Nn]$ ]]; then
+        if install_docker_compose; then
+            print_success "Docker Compose installation completed"
+        else
+            print_error "Docker Compose installation failed. Please install manually:"
+            echo "  https://docs.docker.com/compose/install/"
+            exit 1
+        fi
+    else
+        echo "Please install Docker Compose first:"
+        echo "  https://docs.docker.com/compose/install/"
+        exit 1
+    fi
 fi
 
 # Check if Docker is running
@@ -110,8 +427,18 @@ if docker info >/dev/null 2>&1; then
 else
     print_error "Docker daemon is not running"
     echo ""
-    echo "Please start Docker and try again."
-    exit 1
+    read -p "Do you want to start Docker daemon automatically? (Y/n): " start_docker_choice
+    if [[ ! $start_docker_choice =~ ^[Nn]$ ]]; then
+        if start_docker_daemon; then
+            print_success "Docker daemon started"
+        else
+            print_error "Failed to start Docker daemon. Please start manually and try again."
+            exit 1
+        fi
+    else
+        echo "Please start Docker and try again."
+        exit 1
+    fi
 fi
 
 echo ""
@@ -161,6 +488,28 @@ if [ "$SKIP_ENV_CREATION" != "true" ]; then
         PORT=${PORT:-5000}
     done
     print_success "Port set to: $PORT"
+    echo ""
+    
+    # Frontend URL Configuration
+    echo -e "${YELLOW}Frontend URL Configuration${NC}"
+    echo "────────────────────────────────────────────────────────────────────────────"
+    print_info "This is required for CORS and external access. We'll try to detect your VPS IP automatically."
+    
+    VPS_IP=$(get_vps_ip)
+    if [ -n "$VPS_IP" ]; then
+        DETECTED_URL="http://$VPS_IP:$PORT"
+        print_info "Detected VPS IP: $VPS_IP"
+        read -p "Frontend URL (default: $DETECTED_URL): " FRONTEND_URL
+        FRONTEND_URL=${FRONTEND_URL:-$DETECTED_URL}
+    else
+        print_warning "Could not automatically detect VPS IP"
+        read -p "Enter your Frontend URL (e.g., http://your-domain.com or http://YOUR_IP:$PORT): " FRONTEND_URL
+        while [ -z "$FRONTEND_URL" ] || ! validate_url "$FRONTEND_URL"; do
+            print_error "Please enter a valid URL (must start with http:// or https://)"
+            read -p "Enter your Frontend URL: " FRONTEND_URL
+        done
+    fi
+    print_success "Frontend URL set to: $FRONTEND_URL"
     echo ""
 
     # JWT Secret
@@ -298,6 +647,9 @@ if [ "$SKIP_ENV_CREATION" != "true" ]; then
 NODE_ENV=production
 PORT=$PORT
 
+# Frontend URL (REQUIRED for CORS and external access)
+FRONTEND_URL=$FRONTEND_URL
+
 # JWT Secret (DO NOT SHARE THIS!)
 JWT_SECRET=$JWT_SECRET
 
@@ -430,8 +782,18 @@ echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━�
 echo -e "${GREEN}Access Your Aether Dashboard:${NC}"
 echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
 echo ""
-echo -e "  ${GREEN}Application:${NC}  http://localhost:$PORT"
-echo -e "  ${GREEN}Health Check:${NC}  http://localhost:$PORT/health"
+
+# Get VPS IP for display
+VPS_IP=$(get_vps_ip)
+if [ -n "$VPS_IP" ]; then
+    echo -e "  ${GREEN}Local Access:${NC}    http://localhost:$PORT"
+    echo -e "  ${GREEN}External Access:${NC} http://$VPS_IP:$PORT"
+    echo -e "  ${GREEN}Health Check:${NC}    http://localhost:$PORT/health"
+else
+    echo -e "  ${GREEN}Local Access:${NC}    http://localhost:$PORT"
+    echo -e "  ${GREEN}Health Check:${NC}    http://localhost:$PORT/health"
+    print_warning "Could not detect VPS IP. Use your server's IP address to access externally."
+fi
 echo ""
 echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
 echo -e "${YELLOW}Useful Commands:${NC}"
@@ -446,10 +808,21 @@ echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━�
 echo -e "${YELLOW}Next Steps:${NC}"
 echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
 echo ""
-echo "  1. Open http://localhost:$PORT in your browser"
+if [ -n "$VPS_IP" ]; then
+    echo "  1. Open http://$VPS_IP:$PORT in your browser (or http://localhost:$PORT locally)"
+else
+    echo "  1. Open http://localhost:$PORT in your browser"
+fi
 echo "  2. Register your first admin account"
 echo "  3. Configure your Pterodactyl Panel integration"
 echo "  4. Start managing game servers!"
+echo ""
+
+# Configure firewall
+if [ -n "$PORT" ]; then
+    configure_firewall "$PORT"
+fi
+
 echo ""
 echo -e "${GREEN}Enjoy using Aether Dashboard! 🚀${NC}"
 echo ""
