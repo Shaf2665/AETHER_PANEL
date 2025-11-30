@@ -9,7 +9,7 @@
 # Process substitution can cause hangs, so we avoid it
 
 # Script version
-SCRIPT_VERSION="v2.0.0"
+SCRIPT_VERSION="v2.1.0"
 
 # Colors for output
 RED='\033[0;31m'
