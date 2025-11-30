@@ -204,13 +204,8 @@ if (discordConfig.enabled) {
         }
       }
 
-      // Validate redirect_uri matches configured value
-      const expectedRedirectUri = discordConfig.redirectUri;
-      const actualRedirectUri = `${req.protocol}://${req.get('host')}${req.path}`;
-      // Note: Discord validates redirect_uri, but we should also check
-      if (!expectedRedirectUri.includes(req.get('host'))) {
-        console.warn('Discord OAuth redirect URI mismatch');
-      }
+      // Note: Discord already validates redirect_uri, so we don't need to check it here
+      // We use FRONTEND_URL environment variable as the source of truth for all redirects
 
       // Exchange code for access token
       const tokenResponse = await axios.post(
