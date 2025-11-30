@@ -143,7 +143,6 @@ The setup wizard will:
 - ✅ Run database migrations
 - ✅ Configure firewall rules
 - ✅ Configure nginx reverse proxy (optional)
-- ✅ Automatically obtain SSL certificates with Let's Encrypt (if chosen)
 - ✅ Verify installation
 
 **That's it!** Just answer a few questions and you're ready to go.
@@ -173,16 +172,27 @@ After the setup script completes, you may need to complete a few manual steps de
 
 #### If Using Let's Encrypt
 
-1. **SSL Certificate**: The script will automatically obtain SSL certificates using certbot
-   - If certbot fails or you skipped it during setup, you can run it manually:
-     ```bash
-     sudo apt install certbot python3-certbot-nginx -y
-     sudo certbot --nginx -d dashboard.yourdomain.com
-     ```
-   - Certbot will automatically update your nginx configuration
+1. **SSL Certificate**: You need to run certbot manually after the setup script completes:
+   ```bash
+   # Install certbot (if not already installed)
+   sudo apt install certbot python3-certbot-nginx -y
+   
+   # Obtain SSL certificate (replace with your domain)
+   sudo certbot --nginx -d dashboard.yourdomain.com
+   ```
+   - Certbot will automatically modify your nginx configuration to add SSL
+   - Certbot will configure automatic certificate renewal
+   - Certbot will set up HTTP to HTTPS redirect
 
-2. **Verify HTTPS**: Access your dashboard at `https://dashboard.yourdomain.com`
+2. **Prerequisites for certbot**:
+   - Ensure your domain DNS A record points to your VPS IP
+   - Verify DNS propagation: `dig dashboard.yourdomain.com +short`
+   - Ensure nginx is running and accessible on port 80
+   - Ensure firewall allows incoming connections on port 80
+
+3. **Verify HTTPS**: After running certbot, access your dashboard at `https://dashboard.yourdomain.com`
    - The SSL certificate should be valid and trusted
+   - HTTP requests will automatically redirect to HTTPS
 
 #### Troubleshooting
 

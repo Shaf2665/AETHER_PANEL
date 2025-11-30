@@ -485,10 +485,10 @@ configure_nginx() {
         template_file="nginx/aether-dashboard-cloudflare.conf"
         print_info "Using Cloudflare Flexible SSL configuration (HTTP only)"
     else
-        # Let's Encrypt
-        template_file="nginx/aether-dashboard-letsencrypt.conf"
-        print_info "Using Let's Encrypt configuration (HTTPS with SSL certificates)"
-        print_warning "Note: You'll need to run certbot to obtain SSL certificates after nginx is configured"
+        # Let's Encrypt - Use HTTP-only template first, certbot will add SSL
+        template_file="nginx/aether-dashboard-cloudflare.conf"  # Use HTTP-only template
+        print_info "Using Let's Encrypt configuration"
+        print_info "Creating HTTP-only config first - you'll run certbot manually after setup"
     fi
     
     # Check if template file exists
@@ -556,58 +556,44 @@ configure_nginx() {
     print_success "Nginx site enabled"
     
     # Test nginx configuration
-    # Skip test for Let's Encrypt if certificates don't exist yet
-    local skip_test=false
-    if [ "$ssl_choice" = "2" ]; then
-        local cert_path="/etc/letsencrypt/live/$DOMAIN/fullchain.pem"
-        if [ ! -f "$cert_path" ]; then
-            print_warning "SSL certificates not found yet (will be obtained by certbot)"
-            print_info "Skipping nginx test until certificates are obtained..."
-            skip_test=true
+    # For Let's Encrypt, we use HTTP-only config so nginx can start immediately
+    echo ""
+    print_info "Testing nginx configuration..."
+    if [ "$EUID" -eq 0 ]; then
+        if nginx -t >/dev/null 2>&1; then
+            print_success "Nginx configuration test passed"
+        else
+            print_error "Nginx configuration test failed"
+            print_info "Run 'sudo nginx -t' to see the error details"
+            return 1
+        fi
+    else
+        if sudo nginx -t >/dev/null 2>&1; then
+            print_success "Nginx configuration test passed"
+        else
+            print_error "Nginx configuration test failed"
+            print_info "Run 'sudo nginx -t' to see the error details"
+            return 1
         fi
     fi
     
-    if [ "$skip_test" = "false" ]; then
-        echo ""
-        print_info "Testing nginx configuration..."
-        if [ "$EUID" -eq 0 ]; then
-            if nginx -t >/dev/null 2>&1; then
-                print_success "Nginx configuration test passed"
-            else
-                print_error "Nginx configuration test failed"
-                print_info "Run 'sudo nginx -t' to see the error details"
-                return 1
-            fi
+    # Reload nginx
+    echo ""
+    print_info "Reloading nginx..."
+    if [ "$EUID" -eq 0 ]; then
+        if systemctl reload nginx >/dev/null 2>&1 || service nginx reload >/dev/null 2>&1; then
+            print_success "Nginx reloaded successfully"
         else
-            if sudo nginx -t >/dev/null 2>&1; then
-                print_success "Nginx configuration test passed"
-            else
-                print_error "Nginx configuration test failed"
-                print_info "Run 'sudo nginx -t' to see the error details"
-                return 1
-            fi
-        fi
-        
-        # Reload nginx only if test passed
-        echo ""
-        print_info "Reloading nginx..."
-        if [ "$EUID" -eq 0 ]; then
-            if systemctl reload nginx >/dev/null 2>&1 || service nginx reload >/dev/null 2>&1; then
-                print_success "Nginx reloaded successfully"
-            else
-                print_warning "Failed to reload nginx. You may need to restart it manually:"
-                echo "  sudo systemctl restart nginx"
-            fi
-        else
-            if sudo systemctl reload nginx >/dev/null 2>&1 || sudo service nginx reload >/dev/null 2>&1; then
-                print_success "Nginx reloaded successfully"
-            else
-                print_warning "Failed to reload nginx. You may need to restart it manually:"
-                echo "  sudo systemctl restart nginx"
-            fi
+            print_warning "Failed to reload nginx. You may need to restart it manually:"
+            echo "  sudo systemctl restart nginx"
         fi
     else
-        print_info "Nginx will be tested after SSL certificates are obtained"
+        if sudo systemctl reload nginx >/dev/null 2>&1 || sudo service nginx reload >/dev/null 2>&1; then
+            print_success "Nginx reloaded successfully"
+        else
+            print_warning "Failed to reload nginx. You may need to restart it manually:"
+            echo "  sudo systemctl restart nginx"
+        fi
     fi
     
     echo ""
@@ -615,160 +601,44 @@ configure_nginx() {
     echo ""
     
     if [ "$ssl_choice" = "2" ]; then
-        # Let's Encrypt SSL certificate setup
+        # Let's Encrypt SSL certificate setup - Manual instructions
         print_header "Let's Encrypt SSL Certificate Setup"
         echo "────────────────────────────────────────────────────────────────────────────"
+        print_info "Nginx has been configured with HTTP-only configuration."
         print_info "To enable HTTPS, you need to obtain an SSL certificate from Let's Encrypt."
         echo ""
+        print_warning "IMPORTANT: Run certbot manually after this script completes!"
+        echo ""
+        echo "Steps to obtain SSL certificate:"
+        echo ""
         
-        sync 2>/dev/null || true
-        if confirm_action "Do you want to obtain SSL certificate now using certbot?" "Y"; then
-            # Check if certbot is installed
-            if ! command_exists certbot; then
-                print_info "Certbot is not installed. Installing certbot..."
-                local OS=$(detect_os)
-                
-                case $OS in
-                    ubuntu|debian)
-                        if [ "$EUID" -eq 0 ]; then
-                            apt update && apt install -y certbot python3-certbot-nginx
-                        else
-                            sudo apt update && sudo apt install -y certbot python3-certbot-nginx
-                        fi
-                        ;;
-                    centos|rhel|fedora)
-                        if [ "$EUID" -eq 0 ]; then
-                            yum install -y certbot python3-certbot-nginx || dnf install -y certbot python3-certbot-nginx
-                        else
-                            sudo yum install -y certbot python3-certbot-nginx || sudo dnf install -y certbot python3-certbot-nginx
-                        fi
-                        ;;
-                    arch)
-                        if [ "$EUID" -eq 0 ]; then
-                            pacman -S --noconfirm certbot certbot-nginx
-                        else
-                            sudo pacman -S --noconfirm certbot certbot-nginx
-                        fi
-                        ;;
-                    *)
-                        print_error "Automatic certbot installation not supported for this OS."
-                        print_info "Please install certbot manually:"
-                        echo "  Ubuntu/Debian: sudo apt install certbot python3-certbot-nginx"
-                        echo "  CentOS/RHEL: sudo yum install certbot python3-certbot-nginx"
-                        echo "  Arch: sudo pacman -S certbot certbot-nginx"
-                        echo ""
-                        print_info "Then run: sudo certbot --nginx -d $DOMAIN"
-                        return 0
-                        ;;
-                esac
-                
-                if ! command_exists certbot; then
-                    print_error "Failed to install certbot"
-                    print_info "Please install certbot manually and run: sudo certbot --nginx -d $DOMAIN"
-                    return 0
-                fi
-                
-                print_success "Certbot installed successfully"
-            fi
-            
-            # Create directory for Let's Encrypt verification if it doesn't exist
-            if [ "$EUID" -eq 0 ]; then
-                mkdir -p /var/www/certbot
-                chown -R www-data:www-data /var/www/certbot 2>/dev/null || chown -R nginx:nginx /var/www/certbot 2>/dev/null || true
-            else
-                sudo mkdir -p /var/www/certbot
-                sudo chown -R www-data:www-data /var/www/certbot 2>/dev/null || sudo chown -R nginx:nginx /var/www/certbot 2>/dev/null || true
-            fi
-            
-            # Ensure nginx is running before certbot
-            print_info "Ensuring nginx is running..."
-            if [ "$EUID" -eq 0 ]; then
-                systemctl start nginx >/dev/null 2>&1 || service nginx start >/dev/null 2>&1 || true
-            else
-                sudo systemctl start nginx >/dev/null 2>&1 || sudo service nginx start >/dev/null 2>&1 || true
-            fi
-            
-            echo ""
-            print_info "Obtaining SSL certificate for $DOMAIN..."
-            print_info "Let's Encrypt requires an email address for certificate expiration notifications"
-            echo ""
-            
-            # Ask for email address
-            local certbot_email=""
-            read -p "Enter your email address for Let's Encrypt notifications (optional, press Enter to skip): " certbot_email
-            
-            # Run certbot
-            local certbot_cmd=""
-            if [ "$EUID" -eq 0 ]; then
-                certbot_cmd="certbot"
-            else
-                certbot_cmd="sudo certbot"
-            fi
-            
-            if [ -n "$certbot_email" ]; then
-                print_info "Obtaining certificate with email: $certbot_email"
-                if $certbot_cmd --nginx -d "$DOMAIN" --non-interactive --agree-tos --email "$certbot_email" --redirect 2>/dev/null; then
-                    print_success "SSL certificate obtained and configured successfully!"
-                else
-                    print_warning "Certbot failed with non-interactive mode"
-                    print_info "Trying interactive mode..."
-                    echo ""
-                    print_info "Certbot will now run interactively. Please follow the prompts:"
-                    echo "  - Agree to terms of service"
-                    echo "  - Choose whether to share email with EFF (optional)"
-                    echo ""
-                    if $certbot_cmd --nginx -d "$DOMAIN" --redirect; then
-                        print_success "SSL certificate obtained and configured successfully!"
-                    else
-                        print_error "Certbot failed"
-                        print_info "Please run manually: sudo certbot --nginx -d $DOMAIN"
-                        return 0
-                    fi
-                fi
-            else
-                print_info "No email provided. Certbot will run interactively."
-                echo ""
-                print_info "Certbot will ask you to:"
-                echo "  - Enter your email address"
-                echo "  - Agree to terms of service"
-                echo "  - Choose whether to share email with EFF (optional)"
-                echo ""
-                if $certbot_cmd --nginx -d "$DOMAIN" --redirect; then
-                    print_success "SSL certificate obtained and configured successfully!"
-                else
-                    print_error "Certbot failed"
-                    print_info "Please run manually: sudo certbot --nginx -d $DOMAIN"
-                    return 0
-                fi
-            fi
-            
-            # Test nginx config after certbot
-            echo ""
-            print_info "Testing nginx configuration after certbot changes..."
-            if [ "$EUID" -eq 0 ]; then
-                if nginx -t >/dev/null 2>&1; then
-                    print_success "Nginx configuration test passed"
-                    systemctl reload nginx >/dev/null 2>&1 || service nginx reload >/dev/null 2>&1 || true
-                else
-                    print_error "Nginx configuration test failed after certbot"
-                    print_info "Run 'sudo nginx -t' to see the error details"
-                fi
-            else
-                if sudo nginx -t >/dev/null 2>&1; then
-                    print_success "Nginx configuration test passed"
-                    sudo systemctl reload nginx >/dev/null 2>&1 || sudo service nginx reload >/dev/null 2>&1 || true
-                else
-                    print_error "Nginx configuration test failed after certbot"
-                    print_info "Run 'sudo nginx -t' to see the error details"
-                fi
-            fi
-        else
-            print_info "SSL certificate setup skipped."
-            print_warning "To enable HTTPS later, run:"
-            echo "  1. Install certbot: sudo apt install certbot python3-certbot-nginx"
-            echo "  2. Obtain certificate: sudo certbot --nginx -d $DOMAIN"
-            echo "  3. Certbot will automatically update the nginx configuration"
-        fi
+        # Get VPS IP for DNS instructions
+        local VPS_IP=$(get_vps_ip 2>/dev/null || echo "YOUR_VPS_IP")
+        
+        echo "  1. Ensure your domain DNS is pointing to this server:"
+        echo "     - A record: $DOMAIN → $VPS_IP"
+        echo "     - DNS propagation may take a few minutes to 24 hours"
+        echo "     - Verify DNS: dig $DOMAIN +short"
+        echo ""
+        echo "  2. Install certbot (if not already installed):"
+        echo "     Ubuntu/Debian: sudo apt install certbot python3-certbot-nginx"
+        echo "     CentOS/RHEL:   sudo yum install certbot python3-certbot-nginx"
+        echo "     Arch:          sudo pacman -S certbot certbot-nginx"
+        echo ""
+        echo "  3. Run certbot to obtain and configure SSL certificate:"
+        echo "     sudo certbot --nginx -d $DOMAIN"
+        echo ""
+        echo "  4. Certbot will:"
+        echo "     - Obtain SSL certificate from Let's Encrypt"
+        echo "     - Automatically modify nginx configuration to add SSL"
+        echo "     - Configure automatic certificate renewal"
+        echo "     - Set up HTTP to HTTPS redirect"
+        echo ""
+        print_info "After running certbot, your dashboard will be accessible via HTTPS!"
+        echo ""
+        print_info "Note: Certbot requires nginx to be running and accessible on port 80"
+        print_info "      Make sure your firewall allows incoming connections on port 80"
+        echo ""
     else
         print_info "Cloudflare configuration complete!"
         echo ""
