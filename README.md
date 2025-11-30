@@ -467,6 +467,10 @@ npm start
 
 MIT
 
+## FAQ
+
+Have questions? Check out our [Frequently Asked Questions (FAQ)](FAQ.md) for answers to common installation, configuration, and troubleshooting questions.
+
 ## Contributing
 
 Contributions are welcome! Please feel free to submit a Pull Request.
