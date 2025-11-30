@@ -6,10 +6,21 @@ async function migrate() {
   try {
     console.log('🔄 Running database migrations...');
     
+    // Run main schema
     const schemaPath = path.join(__dirname, 'schema.sql');
     const schema = fs.readFileSync(schemaPath, 'utf8');
-    
     await pool.query(schema);
+    console.log('✅ Main schema migration completed');
+    
+    // Run settings migration
+    const settingsPath = path.join(__dirname, 'migrate-settings.sql');
+    if (fs.existsSync(settingsPath)) {
+      const settings = fs.readFileSync(settingsPath, 'utf8');
+      await pool.query(settings);
+      console.log('✅ Settings table migration completed');
+    } else {
+      console.warn('⚠️  Settings migration file not found, skipping...');
+    }
     
     console.log('✅ Database migration completed successfully');
     process.exit(0);
