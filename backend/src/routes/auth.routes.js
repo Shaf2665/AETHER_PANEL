@@ -182,10 +182,20 @@ if (discordConfig.enabled) {
   // Discord OAuth callback
   router.get('/discord/callback', async (req, res, next) => {
     try {
+      // Validate configuration
+      if (!discordConfig.clientId || !discordConfig.clientSecret) {
+        console.error('Discord OAuth not properly configured - missing Client ID or Secret');
+        const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+        return res.redirect(`${frontendUrl}/login?error=discord_config_error`);
+      }
+      
       const { code, state } = req.query;
 
       if (!code) {
-        return res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:3000'}/login?error=discord_auth_failed`);
+        console.error('Discord OAuth callback: Missing authorization code');
+        console.error('Query parameters:', req.query);
+        const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+        return res.redirect(`${frontendUrl}/login?error=discord_auth_failed&reason=no_code`);
       }
 
       // Validate CSRF state token
@@ -208,21 +218,60 @@ if (discordConfig.enabled) {
       // We use FRONTEND_URL environment variable as the source of truth for all redirects
 
       // Exchange code for access token
-      const tokenResponse = await axios.post(
-        'https://discord.com/api/oauth2/token',
-        new URLSearchParams({
-          client_id: discordConfig.clientId,
-          client_secret: discordConfig.clientSecret,
-          grant_type: 'authorization_code',
-          code: code,
-          redirect_uri: discordConfig.redirectUri,
-        }),
-        {
-          headers: {
-            'Content-Type': 'application/x-www-form-urlencoded',
-          },
+      let tokenResponse;
+      try {
+        tokenResponse = await axios.post(
+          'https://discord.com/api/oauth2/token',
+          new URLSearchParams({
+            client_id: discordConfig.clientId,
+            client_secret: discordConfig.clientSecret,
+            grant_type: 'authorization_code',
+            code: code,
+            redirect_uri: discordConfig.redirectUri,
+          }),
+          {
+            headers: {
+              'Content-Type': 'application/x-www-form-urlencoded',
+            },
+          }
+        );
+      } catch (tokenError) {
+        console.error('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+        console.error('Discord token exchange failed:');
+        
+        if (tokenError.response) {
+          // Discord API error
+          console.error('  Status:', tokenError.response.status);
+          console.error('  Status Text:', tokenError.response.statusText);
+          console.error('  Error Data:', JSON.stringify(tokenError.response.data, null, 2));
+          
+          const errorData = tokenError.response.data;
+          if (errorData?.error === 'invalid_grant') {
+            console.error('  Reason: Invalid grant - code may be expired or already used');
+            console.error('  Solution: User needs to re-authorize');
+          } else if (errorData?.error === 'invalid_client') {
+            console.error('  Reason: Invalid client - check Client ID and Client Secret');
+            console.error('  Solution: Verify Discord OAuth credentials in .env file');
+          } else if (errorData?.error === 'invalid_request') {
+            console.error('  Reason: Invalid request - check redirect_uri matches Discord Developer Portal');
+            console.error('  Current redirect_uri:', discordConfig.redirectUri);
+            console.error('  Solution: Ensure redirect URI in Discord Developer Portal exactly matches the above');
+          }
+        } else if (tokenError.request) {
+          // Network error
+          console.error('  Network Error:', tokenError.message);
+          console.error('  Reason: Could not reach Discord API');
+          console.error('  Solution: Check internet connectivity');
+        } else {
+          // Other error
+          console.error('  Error:', tokenError.message);
+          console.error('  Stack:', tokenError.stack);
         }
-      );
+        
+        console.error('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+        
+        throw tokenError; // Re-throw to be caught by outer catch
+      }
 
       const { access_token } = tokenResponse.data;
 
@@ -303,7 +352,49 @@ if (discordConfig.enabled) {
       const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
       res.redirect(`${frontendUrl}/auth/callback?token=${token}`);
     } catch (error) {
-      console.error('Discord OAuth error:', error);
+      console.error('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+      console.error('Discord OAuth callback error:');
+      console.error('  Error Type:', error.constructor.name);
+      console.error('  Error Message:', error.message);
+      
+      // Log detailed error information
+      if (error.response) {
+        // Discord API error
+        console.error('  Discord API Error:');
+        console.error('    Status:', error.response.status);
+        console.error('    Status Text:', error.response.statusText);
+        console.error('    Data:', JSON.stringify(error.response.data, null, 2));
+        console.error('    URL:', error.config?.url);
+      } else if (error.request) {
+        // Network error
+        console.error('  Network Error:');
+        console.error('    Message:', error.message);
+        console.error('    Request:', error.request);
+      } else {
+        // Other error
+        console.error('  Error Details:');
+        console.error('    Message:', error.message);
+        if (error.stack) {
+          console.error('    Stack:', error.stack);
+        }
+      }
+      
+      // Log current configuration (without secrets)
+      console.error('  Current Configuration:');
+      console.error('    Client ID:', discordConfig.clientId ? 'SET ✓' : 'MISSING ✗');
+      console.error('    Client Secret:', discordConfig.clientSecret ? 'SET ✓' : 'MISSING ✗');
+      console.error('    Redirect URI:', discordConfig.redirectUri);
+      console.error('    Enabled:', discordConfig.enabled);
+      console.error('    Frontend URL:', process.env.FRONTEND_URL || 'NOT SET');
+      console.error('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+      console.error('Troubleshooting Steps:');
+      console.error('  1. Verify Discord Client ID and Secret in .env file');
+      console.error('  2. Check that Redirect URI in Discord Developer Portal matches:');
+      console.error(`     ${discordConfig.redirectUri}`);
+      console.error('  3. Ensure Redirect URI uses HTTPS in production');
+      console.error('  4. Check backend logs above for specific error details');
+      console.error('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+      
       const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
       res.redirect(`${frontendUrl}/login?error=discord_auth_failed`);
     }
