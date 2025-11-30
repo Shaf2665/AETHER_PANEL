@@ -1761,12 +1761,12 @@ print_info "Waiting for database to be ready..."
             break
         fi
         printf "\rWaiting for database... (attempt $i/30) " >&2
-        sleep 2
+        sleep 10
     done
     printf "\r" >&2
     
     if [ "$db_ready" = false ]; then
-        print_error "Database is not ready after 60 seconds"
+        print_error "Database is not ready after 300 seconds"
         print_info "Database user configured: $DB_USER"
         print_info "Trying to check database status manually..."
         $DOCKER_COMPOSE_CMD exec -T aether-postgres pg_isready -U "$DB_USER" || true
