@@ -29,12 +29,12 @@ function validateEnv() {
     errors.push('DB_PASSWORD is required');
   }
 
-  // Pterodactyl configuration
-  if (!process.env.PTERODACTYL_URL) {
-    errors.push('PTERODACTYL_URL is required');
-  }
-  if (!process.env.PTERODACTYL_APPLICATION_API_KEY) {
-    errors.push('PTERODACTYL_APPLICATION_API_KEY is required');
+  // Pterodactyl configuration (optional - can be set via admin UI)
+  // Only warn if not set, don't fail - allows configuration via admin panel
+  if (!process.env.PTERODACTYL_URL && !process.env.PTERODACTYL_APPLICATION_API_KEY) {
+    console.warn('⚠️  WARNING: Pterodactyl configuration not set.');
+    console.warn('   Server creation will fail until Pterodactyl is configured.');
+    console.warn('   You can configure it via the Admin Panel after setup.');
   }
 
   // Production-specific requirements

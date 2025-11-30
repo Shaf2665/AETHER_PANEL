@@ -1091,26 +1091,41 @@ if [ -f .env ]; then
     fi
     echo ""
 
-    # Pterodactyl Configuration
+    # Pterodactyl Configuration (Optional - can be configured later in Admin Panel)
     print_header "Pterodactyl Panel Configuration"
     echo "────────────────────────────────────────────────────────────────────────────"
-    print_info "You'll need API keys from your Pterodactyl Panel"
+    print_info "Pterodactyl Panel integration is required for server creation."
+    print_info "You can configure it now or later in the Admin Panel."
     echo ""
     
-    read -p "Pterodactyl Panel URL: " PTERODACTYL_URL
-    while [ -z "$PTERODACTYL_URL" ] || ! validate_url "$PTERODACTYL_URL"; do
-        print_error "Please enter a valid URL (e.g., https://panel.example.com)"
+    # Force flush before showing prompt
+    sync 2>/dev/null || true
+    
+    if confirm_action "Do you want to configure Pterodactyl Panel now?" "N"; then
+        print_info "You'll need API keys from your Pterodactyl Panel"
+        echo ""
+        
         read -p "Pterodactyl Panel URL: " PTERODACTYL_URL
-    done
-    
-    read -p "Pterodactyl Application API Key: " PTERODACTYL_APPLICATION_API_KEY
-    read -p "Pterodactyl Client API Key: " PTERODACTYL_CLIENT_API_KEY
-    
-    # Optional: API Key (legacy)
-    read -p "Pterodactyl API Key (optional, press Enter to skip): " PTERODACTYL_API_KEY
-    PTERODACTYL_API_KEY=${PTERODACTYL_API_KEY:-}
-    
-    print_success "Pterodactyl configuration set"
+        while [ -z "$PTERODACTYL_URL" ] || ! validate_url "$PTERODACTYL_URL"; do
+            print_error "Please enter a valid URL (e.g., https://panel.example.com)"
+            read -p "Pterodactyl Panel URL: " PTERODACTYL_URL
+        done
+        
+        read -p "Pterodactyl Application API Key: " PTERODACTYL_APPLICATION_API_KEY
+        read -p "Pterodactyl Client API Key: " PTERODACTYL_CLIENT_API_KEY
+        
+        # Optional: API Key (legacy)
+        read -p "Pterodactyl API Key (optional, press Enter to skip): " PTERODACTYL_API_KEY
+        PTERODACTYL_API_KEY=${PTERODACTYL_API_KEY:-}
+        
+        print_success "Pterodactyl configuration set"
+    else
+        print_info "Pterodactyl configuration skipped. You can configure it later in the Admin Panel."
+        PTERODACTYL_URL=""
+        PTERODACTYL_API_KEY=""
+        PTERODACTYL_CLIENT_API_KEY=""
+        PTERODACTYL_APPLICATION_API_KEY=""
+    fi
     echo ""
 
     # Revenue System Configuration

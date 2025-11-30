@@ -5,7 +5,9 @@ const { validate } = require('../middleware/validation.middleware');
 const User = require('../models/User');
 const Server = require('../models/Server');
 const Transaction = require('../models/Transaction');
+const Settings = require('../models/Settings');
 const coinService = require('../services/coin.service');
+const pterodactylConfig = require('../config/pterodactyl');
 const pool = require('../config/database');
 
 const router = express.Router();
@@ -376,6 +378,56 @@ router.get('/revenue', async (req, res, next) => {
     } finally {
       client.release();
     }
+  } catch (error) {
+    next(error);
+  }
+});
+
+// Get Pterodactyl settings
+router.get('/settings/pterodactyl', async (req, res, next) => {
+  try {
+    await pterodactylConfig.refresh(); // Refresh cache
+    const config = await Settings.getPterodactylConfig();
+    res.json(config);
+  } catch (error) {
+    next(error);
+  }
+});
+
+// Update Pterodactyl settings
+router.put('/settings/pterodactyl', [
+  body('url').optional().isURL().withMessage('Invalid URL'),
+  body('apiKey').optional().isString(),
+  body('clientApiKey').optional().isString(),
+  body('applicationApiKey').optional().isString(),
+  body('nodeId').optional().isInt({ min: 1 }),
+  body('nestId').optional().isInt({ min: 1 }),
+  body('eggIdMinecraft').optional().isInt({ min: 1 }),
+  body('eggIdFivem').optional().isInt({ min: 1 }),
+  body('eggIdOther').optional().isInt({ min: 1 }),
+  body('defaultUserId').optional().isInt({ min: 1 }),
+  validate
+], async (req, res, next) => {
+  try {
+    const updates = req.body;
+    
+    if (updates.url !== undefined) await Settings.set('pterodactyl_url', updates.url);
+    if (updates.apiKey !== undefined) await Settings.set('pterodactyl_api_key', updates.apiKey);
+    if (updates.clientApiKey !== undefined) await Settings.set('pterodactyl_client_api_key', updates.clientApiKey);
+    if (updates.applicationApiKey !== undefined) await Settings.set('pterodactyl_application_api_key', updates.applicationApiKey);
+    if (updates.nodeId !== undefined) await Settings.set('pterodactyl_node_id', updates.nodeId.toString());
+    if (updates.nestId !== undefined) await Settings.set('pterodactyl_nest_id', updates.nestId.toString());
+    if (updates.eggIdMinecraft !== undefined) await Settings.set('pterodactyl_egg_id_minecraft', updates.eggIdMinecraft.toString());
+    if (updates.eggIdFivem !== undefined) await Settings.set('pterodactyl_egg_id_fivem', updates.eggIdFivem.toString());
+    if (updates.eggIdOther !== undefined) await Settings.set('pterodactyl_egg_id_other', updates.eggIdOther.toString());
+    if (updates.defaultUserId !== undefined) await Settings.set('pterodactyl_default_user_id', updates.defaultUserId.toString());
+
+    // Clear cache to force refresh
+    pterodactylConfig.clearCache();
+    await pterodactylConfig.refresh();
+
+    const updatedConfig = await Settings.getPterodactylConfig();
+    res.json({ message: 'Settings updated successfully', config: updatedConfig });
   } catch (error) {
     next(error);
   }

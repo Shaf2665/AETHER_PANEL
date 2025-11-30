@@ -3,12 +3,30 @@ const config = require('../config/pterodactyl');
 
 class PterodactylService {
   constructor() {
+    // Initialize with env vars, will be refreshed on first use
     this.baseURL = config.baseUrl;
     this.apiKey = config.applicationApiKey;
     this.clientApiKey = config.clientApiKey;
   }
 
+  /**
+   * Refresh configuration from database before making requests
+   */
+  async refreshConfig() {
+    try {
+      await config.refresh();
+      this.baseURL = config.baseUrl;
+      this.apiKey = config.applicationApiKey;
+      this.clientApiKey = config.clientApiKey;
+    } catch (error) {
+      console.warn('Failed to refresh Pterodactyl config, using cached/env values:', error.message);
+    }
+  }
+
   async makeRequest(method, endpoint, data = null, useClientApi = false) {
+    // Refresh config before making request to ensure we have latest settings
+    await this.refreshConfig();
+    
     const url = `${this.baseURL}/api${endpoint}`;
     const headers = {
       'Authorization': `Bearer ${useClientApi ? this.clientApiKey : this.apiKey}`,

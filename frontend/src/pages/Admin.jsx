@@ -13,7 +13,8 @@ import {
   PencilIcon,
   TrashIcon,
   XMarkIcon,
-  ArrowPathIcon
+  ArrowPathIcon,
+  Cog6ToothIcon
 } from '@heroicons/react/24/outline';
 
 const Admin = () => {
@@ -28,6 +29,19 @@ const Admin = () => {
   const [coinAdjustmentModal, setCoinAdjustmentModal] = useState(false);
   const [coinAmount, setCoinAmount] = useState(0);
   const [coinDescription, setCoinDescription] = useState('');
+  const [pterodactylSettings, setPterodactylSettings] = useState({
+    url: '',
+    apiKey: '',
+    clientApiKey: '',
+    applicationApiKey: '',
+    nodeId: 1,
+    nestId: 1,
+    eggIdMinecraft: 1,
+    eggIdFivem: 2,
+    eggIdOther: 1,
+    defaultUserId: 1,
+  });
+  const [settingsLoading, setSettingsLoading] = useState(false);
 
   // Fetch system statistics
   const { data: stats, isLoading: statsLoading } = useQuery('adminStats', async () => {
@@ -169,12 +183,65 @@ const Admin = () => {
     });
   };
 
+  // Fetch Pterodactyl settings
+  const { data: pterodactylData, isLoading: pterodactylLoading, refetch: refetchPterodactyl } = useQuery(
+    'pterodactylSettings',
+    async () => {
+      const res = await api.get('/admin/settings/pterodactyl');
+      return res.data;
+    },
+    {
+      onSuccess: (data) => {
+        setPterodactylSettings({
+          url: data.url || '',
+          apiKey: data.apiKey || '',
+          clientApiKey: data.clientApiKey || '',
+          applicationApiKey: data.applicationApiKey || '',
+          nodeId: data.nodeId || 1,
+          nestId: data.nestId || 1,
+          eggIdMinecraft: data.eggIds?.minecraft || 1,
+          eggIdFivem: data.eggIds?.fivem || 2,
+          eggIdOther: data.eggIds?.other || 1,
+          defaultUserId: data.defaultUserId || 1,
+        });
+      },
+    }
+  );
+
+  // Update Pterodactyl settings mutation
+  const updatePterodactylMutation = useMutation(
+    async (data) => {
+      const res = await api.put('/admin/settings/pterodactyl', data);
+      return res.data;
+    },
+    {
+      onSuccess: () => {
+        toast.success('Pterodactyl settings updated successfully');
+        refetchPterodactyl();
+      },
+      onError: (error) => {
+        toast.error(error.response?.data?.error || 'Failed to update settings');
+      },
+    }
+  );
+
+  const handlePterodactylSubmit = (e) => {
+    e.preventDefault();
+    setSettingsLoading(true);
+    updatePterodactylMutation.mutate(pterodactylSettings, {
+      onSettled: () => {
+        setSettingsLoading(false);
+      },
+    });
+  };
+
   const tabs = [
     { id: 'stats', name: 'Statistics', icon: ChartBarIcon },
     { id: 'users', name: 'Users', icon: UsersIcon },
     { id: 'servers', name: 'Servers', icon: ServerIcon },
     { id: 'transactions', name: 'Transactions', icon: CurrencyDollarIcon },
     { id: 'revenue', name: 'Revenue', icon: ArrowTrendingUpIcon },
+    { id: 'settings', name: 'Settings', icon: Cog6ToothIcon },
   ];
 
   return (
@@ -678,6 +745,190 @@ const Admin = () => {
                   </div>
                 </div>
               ) : null}
+            </div>
+          )}
+
+          {/* Settings Tab */}
+          {activeTab === 'settings' && (
+            <div>
+              {pterodactylLoading ? (
+                <div className="flex justify-center py-12">
+                  <ArrowPathIcon className="h-8 w-8 animate-spin text-indigo-600" />
+                </div>
+              ) : (
+                <div className="space-y-6">
+                  <div>
+                    <h2 className="text-xl font-semibold mb-4 text-gray-800">Pterodactyl Panel Configuration</h2>
+                    <p className="text-sm text-gray-600 mb-6">
+                      Configure your Pterodactyl Panel API keys and settings. These settings are required for server creation and management.
+                    </p>
+
+                    <form onSubmit={handlePterodactylSubmit} className="bg-white rounded-lg border border-gray-200 p-6 space-y-6">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div className="md:col-span-2">
+                          <label className="block text-sm font-medium text-gray-700 mb-2">
+                            Pterodactyl Panel URL
+                          </label>
+                          <input
+                            type="url"
+                            value={pterodactylSettings.url}
+                            onChange={(e) => setPterodactylSettings({ ...pterodactylSettings, url: e.target.value })}
+                            placeholder="https://panel.example.com"
+                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                            required
+                          />
+                          <p className="mt-1 text-sm text-gray-500">The base URL of your Pterodactyl Panel</p>
+                        </div>
+
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">
+                            Application API Key
+                          </label>
+                          <input
+                            type="password"
+                            value={pterodactylSettings.applicationApiKey}
+                            onChange={(e) => setPterodactylSettings({ ...pterodactylSettings, applicationApiKey: e.target.value })}
+                            placeholder="ptlc_..."
+                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                            required
+                          />
+                          <p className="mt-1 text-sm text-gray-500">Application API key from Pterodactyl</p>
+                        </div>
+
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">
+                            Client API Key
+                          </label>
+                          <input
+                            type="password"
+                            value={pterodactylSettings.clientApiKey}
+                            onChange={(e) => setPterodactylSettings({ ...pterodactylSettings, clientApiKey: e.target.value })}
+                            placeholder="ptlc_..."
+                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                          />
+                          <p className="mt-1 text-sm text-gray-500">Client API key (optional, for server status)</p>
+                        </div>
+
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">
+                            API Key (Legacy)
+                          </label>
+                          <input
+                            type="password"
+                            value={pterodactylSettings.apiKey}
+                            onChange={(e) => setPterodactylSettings({ ...pterodactylSettings, apiKey: e.target.value })}
+                            placeholder="ptlc_..."
+                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                          />
+                          <p className="mt-1 text-sm text-gray-500">Legacy API key (optional)</p>
+                        </div>
+
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">
+                            Default Node ID
+                          </label>
+                          <input
+                            type="number"
+                            min="1"
+                            value={pterodactylSettings.nodeId}
+                            onChange={(e) => setPterodactylSettings({ ...pterodactylSettings, nodeId: parseInt(e.target.value) || 1 })}
+                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                            required
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">
+                            Default Nest ID
+                          </label>
+                          <input
+                            type="number"
+                            min="1"
+                            value={pterodactylSettings.nestId}
+                            onChange={(e) => setPterodactylSettings({ ...pterodactylSettings, nestId: parseInt(e.target.value) || 1 })}
+                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                            required
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">
+                            Minecraft Egg ID
+                          </label>
+                          <input
+                            type="number"
+                            min="1"
+                            value={pterodactylSettings.eggIdMinecraft}
+                            onChange={(e) => setPterodactylSettings({ ...pterodactylSettings, eggIdMinecraft: parseInt(e.target.value) || 1 })}
+                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                            required
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">
+                            FiveM Egg ID
+                          </label>
+                          <input
+                            type="number"
+                            min="1"
+                            value={pterodactylSettings.eggIdFivem}
+                            onChange={(e) => setPterodactylSettings({ ...pterodactylSettings, eggIdFivem: parseInt(e.target.value) || 2 })}
+                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                            required
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">
+                            Other Game Egg ID
+                          </label>
+                          <input
+                            type="number"
+                            min="1"
+                            value={pterodactylSettings.eggIdOther}
+                            onChange={(e) => setPterodactylSettings({ ...pterodactylSettings, eggIdOther: parseInt(e.target.value) || 1 })}
+                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                            required
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">
+                            Default User ID
+                          </label>
+                          <input
+                            type="number"
+                            min="1"
+                            value={pterodactylSettings.defaultUserId}
+                            onChange={(e) => setPterodactylSettings({ ...pterodactylSettings, defaultUserId: parseInt(e.target.value) || 1 })}
+                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                            required
+                          />
+                          <p className="mt-1 text-sm text-gray-500">Pterodactyl user ID for server ownership</p>
+                        </div>
+                      </div>
+
+                      <div className="flex justify-end space-x-3 pt-4 border-t border-gray-200">
+                        <button
+                          type="button"
+                          onClick={() => refetchPterodactyl()}
+                          className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors"
+                        >
+                          Reset
+                        </button>
+                        <button
+                          type="submit"
+                          disabled={settingsLoading}
+                          className="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          {settingsLoading ? 'Saving...' : 'Save Settings'}
+                        </button>
+                      </div>
+                    </form>
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>
