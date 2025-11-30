@@ -142,9 +142,60 @@ The setup wizard will:
 - ✅ Build and start all services
 - ✅ Run database migrations
 - ✅ Configure firewall rules
+- ✅ Configure nginx reverse proxy (optional)
+- ✅ Automatically obtain SSL certificates with Let's Encrypt (if chosen)
 - ✅ Verify installation
 
 **That's it!** Just answer a few questions and you're ready to go.
+
+### Post-Installation Steps
+
+After the setup script completes, you may need to complete a few manual steps depending on your configuration:
+
+#### If Using Cloudflare (Subdomain Setup)
+
+1. **Verify DNS Configuration**: Ensure your DNS A record is configured in Cloudflare:
+   - Record Type: A
+   - Name: `dashboard` (or your subdomain)
+   - Content: Your VPS IP address
+   - Proxy: **Proxied** (orange cloud) - **Required for HTTPS**
+
+2. **Configure Cloudflare SSL/TLS Mode** (Critical):
+   - Go to Cloudflare Dashboard → Your Domain → **SSL/TLS**
+   - Set **Encryption mode** to **"Flexible"** (NOT "Full" or "Full (strict)")
+   - This is required because your origin server runs on HTTP
+   - Wait 1-2 minutes for changes to propagate
+   - **Without this setting, you'll see SSL certificate errors** (NET::ERR_CERT_COMMON_NAME_INVALID)
+
+3. **Verify Access**: Try accessing your dashboard at `https://dashboard.yourdomain.com`
+   - If you see SSL certificate errors, check that Cloudflare SSL/TLS mode is set to "Flexible"
+   - DNS propagation may take a few minutes to 24 hours
+
+#### If Using Let's Encrypt
+
+1. **SSL Certificate**: The script will automatically obtain SSL certificates using certbot
+   - If certbot fails or you skipped it during setup, you can run it manually:
+     ```bash
+     sudo apt install certbot python3-certbot-nginx -y
+     sudo certbot --nginx -d dashboard.yourdomain.com
+     ```
+   - Certbot will automatically update your nginx configuration
+
+2. **Verify HTTPS**: Access your dashboard at `https://dashboard.yourdomain.com`
+   - The SSL certificate should be valid and trusted
+
+#### Troubleshooting
+
+- **Dashboard not accessible via domain**: 
+  - Check nginx is running: `sudo systemctl status nginx`
+  - Check nginx configuration: `sudo nginx -t`
+  - Verify DNS settings in Cloudflare
+- **SSL certificate errors**: 
+  - For Cloudflare: Ensure SSL/TLS mode is set to "Flexible" (not "Full")
+  - For Let's Encrypt: Verify certbot ran successfully: `sudo certbot certificates`
+- **Nginx errors**: 
+  - Test configuration: `sudo nginx -t`
+  - Check error logs: `sudo tail -f /var/log/nginx/error.log`
 
 ### Manual Installation (Alternative)
 
@@ -330,9 +381,14 @@ If you want to use a subdomain instead of an IP address:
    - Record Type: A
    - Name: `dashboard` (or your preferred subdomain)
    - Content: Your VPS IP address
-   - Proxy: Proxied (orange cloud) - Recommended for HTTPS support
-3. **HTTPS**: With Cloudflare proxy enabled, HTTPS is automatically available
-4. **Update FRONTEND_URL**: Set `FRONTEND_URL=https://dashboard.yourdomain.com` in your `.env` file
+   - Proxy: **Proxied** (orange cloud) - **Required for HTTPS support**
+3. **Cloudflare SSL/TLS Configuration** (Critical):
+   - Go to Cloudflare Dashboard → Your Domain → **SSL/TLS**
+   - Set **Encryption mode** to **"Flexible"** (NOT "Full" or "Full (strict)")
+   - This is required because your origin server runs on HTTP
+   - Without this setting, you'll see SSL certificate errors (NET::ERR_CERT_COMMON_NAME_INVALID)
+4. **HTTPS**: With Cloudflare proxy enabled and SSL/TLS mode set to "Flexible", HTTPS is automatically available
+5. **Update FRONTEND_URL**: The setup script will automatically set `FRONTEND_URL=https://dashboard.yourdomain.com` in your `.env` file
 
 ### First Admin Setup
 

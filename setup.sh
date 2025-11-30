@@ -556,43 +556,58 @@ configure_nginx() {
     print_success "Nginx site enabled"
     
     # Test nginx configuration
-    echo ""
-    print_info "Testing nginx configuration..."
-    if [ "$EUID" -eq 0 ]; then
-        if nginx -t >/dev/null 2>&1; then
-            print_success "Nginx configuration test passed"
-        else
-            print_error "Nginx configuration test failed"
-            print_info "Run 'sudo nginx -t' to see the error details"
-            return 1
-        fi
-    else
-        if sudo nginx -t >/dev/null 2>&1; then
-            print_success "Nginx configuration test passed"
-        else
-            print_error "Nginx configuration test failed"
-            print_info "Run 'sudo nginx -t' to see the error details"
-            return 1
+    # Skip test for Let's Encrypt if certificates don't exist yet
+    local skip_test=false
+    if [ "$ssl_choice" = "2" ]; then
+        local cert_path="/etc/letsencrypt/live/$DOMAIN/fullchain.pem"
+        if [ ! -f "$cert_path" ]; then
+            print_warning "SSL certificates not found yet (will be obtained by certbot)"
+            print_info "Skipping nginx test until certificates are obtained..."
+            skip_test=true
         fi
     fi
     
-    # Reload nginx
-    echo ""
-    print_info "Reloading nginx..."
-    if [ "$EUID" -eq 0 ]; then
-        if systemctl reload nginx >/dev/null 2>&1 || service nginx reload >/dev/null 2>&1; then
-            print_success "Nginx reloaded successfully"
+    if [ "$skip_test" = "false" ]; then
+        echo ""
+        print_info "Testing nginx configuration..."
+        if [ "$EUID" -eq 0 ]; then
+            if nginx -t >/dev/null 2>&1; then
+                print_success "Nginx configuration test passed"
+            else
+                print_error "Nginx configuration test failed"
+                print_info "Run 'sudo nginx -t' to see the error details"
+                return 1
+            fi
         else
-            print_warning "Failed to reload nginx. You may need to restart it manually:"
-            echo "  sudo systemctl restart nginx"
+            if sudo nginx -t >/dev/null 2>&1; then
+                print_success "Nginx configuration test passed"
+            else
+                print_error "Nginx configuration test failed"
+                print_info "Run 'sudo nginx -t' to see the error details"
+                return 1
+            fi
+        fi
+        
+        # Reload nginx only if test passed
+        echo ""
+        print_info "Reloading nginx..."
+        if [ "$EUID" -eq 0 ]; then
+            if systemctl reload nginx >/dev/null 2>&1 || service nginx reload >/dev/null 2>&1; then
+                print_success "Nginx reloaded successfully"
+            else
+                print_warning "Failed to reload nginx. You may need to restart it manually:"
+                echo "  sudo systemctl restart nginx"
+            fi
+        else
+            if sudo systemctl reload nginx >/dev/null 2>&1 || sudo service nginx reload >/dev/null 2>&1; then
+                print_success "Nginx reloaded successfully"
+            else
+                print_warning "Failed to reload nginx. You may need to restart it manually:"
+                echo "  sudo systemctl restart nginx"
+            fi
         fi
     else
-        if sudo systemctl reload nginx >/dev/null 2>&1 || sudo service nginx reload >/dev/null 2>&1; then
-            print_success "Nginx reloaded successfully"
-        else
-            print_warning "Failed to reload nginx. You may need to restart it manually:"
-            echo "  sudo systemctl restart nginx"
-        fi
+        print_info "Nginx will be tested after SSL certificates are obtained"
     fi
     
     echo ""
