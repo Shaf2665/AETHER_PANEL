@@ -1157,6 +1157,52 @@ if [ -f .env ]; then
     fi
     echo ""
 
+    # Discord OAuth Configuration (Optional)
+    print_header "Discord OAuth Configuration"
+    echo "────────────────────────────────────────────────────────────────────────────"
+    print_info "Discord OAuth allows users to sign in with their Discord account."
+    print_info "You can configure it now or later by editing the .env file."
+    echo ""
+    print_info "To set up Discord OAuth:"
+    echo "  1. Go to https://discord.com/developers/applications"
+    echo "  2. Create a new application"
+    echo "  3. Go to OAuth2 section"
+    echo "  4. Add redirect URI: ${FRONTEND_URL}/api/auth/discord/callback"
+    echo "  5. Copy Client ID and Client Secret"
+    echo ""
+    
+    # Force flush before showing prompt
+    sync 2>/dev/null || true
+    
+    if confirm_action "Do you want to configure Discord OAuth now?" "N"; then
+        read -p "Discord Client ID: " DISCORD_CLIENT_ID
+        while [ -z "$DISCORD_CLIENT_ID" ]; do
+            print_error "Discord Client ID is required"
+            read -p "Discord Client ID: " DISCORD_CLIENT_ID
+        done
+        
+        read -p "Discord Client Secret: " DISCORD_CLIENT_SECRET
+        while [ -z "$DISCORD_CLIENT_SECRET" ]; do
+            print_error "Discord Client Secret is required"
+            read -p "Discord Client Secret: " DISCORD_CLIENT_SECRET
+        done
+        
+        # Auto-generate redirect URI from FRONTEND_URL
+        DISCORD_REDIRECT_URI="${FRONTEND_URL}/api/auth/discord/callback"
+        print_info "Discord Redirect URI: $DISCORD_REDIRECT_URI"
+        print_info "Make sure this URI is added to your Discord application's OAuth2 redirects"
+        
+        DISCORD_ENABLED="true"
+        print_success "Discord OAuth configuration set"
+    else
+        DISCORD_ENABLED="false"
+        DISCORD_CLIENT_ID=""
+        DISCORD_CLIENT_SECRET=""
+        DISCORD_REDIRECT_URI=""
+        print_info "Discord OAuth disabled. You can enable it later by editing .env file"
+    fi
+    echo ""
+
     # Revenue System Configuration
     print_header "Revenue System Configuration"
     echo "────────────────────────────────────────────────────────────────────────────"
@@ -1244,6 +1290,12 @@ PTERODACTYL_URL=$PTERODACTYL_URL
 PTERODACTYL_API_KEY=$PTERODACTYL_API_KEY
 PTERODACTYL_CLIENT_API_KEY=$PTERODACTYL_CLIENT_API_KEY
 PTERODACTYL_APPLICATION_API_KEY=$PTERODACTYL_APPLICATION_API_KEY
+
+# Discord OAuth Configuration
+DISCORD_ENABLED=$DISCORD_ENABLED
+DISCORD_CLIENT_ID=$DISCORD_CLIENT_ID
+DISCORD_CLIENT_SECRET=$DISCORD_CLIENT_SECRET
+DISCORD_REDIRECT_URI=$DISCORD_REDIRECT_URI
 
 # Revenue System Configuration
 LINKVERTISE_ENABLED=$LINKVERTISE_ENABLED
