@@ -68,7 +68,7 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 40s
+      start_period: 60s  # Increased from 40s to allow more time for database connections during startup
 
   postgres:
     image: postgres:15-alpine

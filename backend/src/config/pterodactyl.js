@@ -56,10 +56,10 @@ async function getConfig() {
   return cachedConfig;
 }
 
-// Initialize cache on module load (non-blocking)
-getConfig().catch(() => {
-  // Ignore errors during initialization, will use env vars
-});
+// Note: Cache is populated lazily on first access or when refresh() is called
+// This prevents database queries during module initialization when the database
+// may not be fully ready. The refresh() method is called in pterodactyl.service.js
+// before making requests to ensure the latest config is used.
 
 // Export sync getters for backward compatibility (uses cached config)
 // These will use env vars until cache is populated
