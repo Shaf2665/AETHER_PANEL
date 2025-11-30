@@ -799,12 +799,12 @@ check_prerequisites() {
     if [ -z "$DOCKER_COMPOSE_CMD" ]; then
         print_error "Docker Compose command not set. This should not happen." >&2
         return 1
-    fi
-    
-    # Check if Docker is running
+fi
+
+# Check if Docker is running
 if docker info >/dev/null 2>&1; then
         print_success "Docker daemon is running" >&2
-    else
+else
         print_error "Docker daemon is not running" >&2
         echo "" >&2
         
@@ -821,7 +821,7 @@ if docker info >/dev/null 2>&1; then
         else
             print_error "Docker daemon must be running. Please start it and try again." >&2
             return 1
-        fi
+fi
     fi
     
     echo "" >&2
@@ -1051,7 +1051,7 @@ if [ -f .env ]; then
         echo "  - iptables: sudo iptables -A INPUT -p tcp --dport $PORT -j ACCEPT"
     fi
     echo ""
-    
+
     # JWT Secret
     print_header "Security Configuration"
     echo "────────────────────────────────────────────────────────────────────────────"
@@ -1131,23 +1131,23 @@ if [ -f .env ]; then
     sync 2>/dev/null || true
     
     if confirm_action "Do you want to configure Pterodactyl Panel now?" "N"; then
-        print_info "You'll need API keys from your Pterodactyl Panel"
-        echo ""
-        
+    print_info "You'll need API keys from your Pterodactyl Panel"
+    echo ""
+    
+    read -p "Pterodactyl Panel URL: " PTERODACTYL_URL
+    while [ -z "$PTERODACTYL_URL" ] || ! validate_url "$PTERODACTYL_URL"; do
+        print_error "Please enter a valid URL (e.g., https://panel.example.com)"
         read -p "Pterodactyl Panel URL: " PTERODACTYL_URL
-        while [ -z "$PTERODACTYL_URL" ] || ! validate_url "$PTERODACTYL_URL"; do
-            print_error "Please enter a valid URL (e.g., https://panel.example.com)"
-            read -p "Pterodactyl Panel URL: " PTERODACTYL_URL
-        done
-        
-        read -p "Pterodactyl Application API Key: " PTERODACTYL_APPLICATION_API_KEY
-        read -p "Pterodactyl Client API Key: " PTERODACTYL_CLIENT_API_KEY
-        
-        # Optional: API Key (legacy)
-        read -p "Pterodactyl API Key (optional, press Enter to skip): " PTERODACTYL_API_KEY
-        PTERODACTYL_API_KEY=${PTERODACTYL_API_KEY:-}
-        
-        print_success "Pterodactyl configuration set"
+    done
+    
+    read -p "Pterodactyl Application API Key: " PTERODACTYL_APPLICATION_API_KEY
+    read -p "Pterodactyl Client API Key: " PTERODACTYL_CLIENT_API_KEY
+    
+    # Optional: API Key (legacy)
+    read -p "Pterodactyl API Key (optional, press Enter to skip): " PTERODACTYL_API_KEY
+    PTERODACTYL_API_KEY=${PTERODACTYL_API_KEY:-}
+    
+    print_success "Pterodactyl configuration set"
     else
         print_info "Pterodactyl configuration skipped. You can configure it later in the Admin Panel."
         PTERODACTYL_URL=""
@@ -1445,8 +1445,8 @@ echo ""
         fi
     done
     
-    echo ""
-    
+echo ""
+
     # Health check with retries
     local PORT=$(grep "^PORT=" .env 2>/dev/null | cut -d'=' -f2 | tr -d '"' || echo "5000")
     PORT=${PORT:-5000}
@@ -1616,7 +1616,7 @@ echo ""
     echo "For more help, check the logs:"
     echo "  $DOCKER_COMPOSE_CMD logs -f aether-dashboard"
     echo ""
-    echo ""
+echo ""
 echo -e "${GREEN}Enjoy using Aether Dashboard! 🚀${NC}"
 echo ""
 }
