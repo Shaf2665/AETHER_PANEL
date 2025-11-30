@@ -656,13 +656,16 @@ check_prerequisites() {
     local compose_available=false
     local compose_cmd=""
     
-    # First, try docker compose (v2 plugin)
+    # First, try docker compose (v2 plugin) - more robust check
     if docker compose version >/dev/null 2>&1; then
-        if test_docker_compose "docker compose"; then
-            local COMPOSE_VERSION=$(docker compose version | awk '{print $4}')
+        # Verify it actually works by testing a simple command
+        if docker compose ps >/dev/null 2>&1 || test_docker_compose "docker compose"; then
+            local COMPOSE_VERSION=$(docker compose version 2>/dev/null | awk '{print $4}' || echo "unknown")
             print_success "Docker Compose is installed (version: $COMPOSE_VERSION) - v2 plugin" >&2
             DOCKER_COMPOSE_CMD="docker compose"
             compose_available=true
+        else
+            print_warning "docker compose command found but not working properly" >&2
         fi
     fi
     
@@ -752,7 +755,9 @@ check_prerequisites() {
     fi
     
     if [ "$compose_available" = false ]; then
-        print_error "Docker Compose is not installed" >&2
+        print_error "Docker Compose is not installed or not working" >&2
+        echo "" >&2
+        print_info "Docker Compose is required to run the dashboard services." >&2
         echo "" >&2
         
         # Force flush before showing prompt
@@ -760,16 +765,41 @@ check_prerequisites() {
         
         if confirm_action "Do you want to install Docker Compose automatically?" "Y"; then
             if install_docker_compose; then
-                print_success "Docker Compose installation completed" >&2
+                # Verify installation worked
+                if docker compose version >/dev/null 2>&1; then
+                    DOCKER_COMPOSE_CMD="docker compose"
+                    compose_available=true
+                    print_success "Docker Compose installation completed and verified" >&2
+                elif command_exists docker-compose && docker-compose --version >/dev/null 2>&1; then
+                    DOCKER_COMPOSE_CMD="docker-compose"
+                    compose_available=true
+                    print_success "Docker Compose installation completed and verified" >&2
+                else
+                    print_error "Docker Compose was installed but verification failed" >&2
+                    print_info "Please try running: docker compose version" >&2
+                    return 1
+                fi
             else
                 print_error "Docker Compose installation failed. Please install manually:" >&2
-                echo "  https://docs.docker.com/compose/install/" >&2
+                echo "  Ubuntu/Debian: sudo apt-get install docker-compose-plugin" >&2
+                echo "  CentOS/RHEL: sudo yum install docker-compose-plugin" >&2
+                echo "  Or visit: https://docs.docker.com/compose/install/" >&2
                 return 1
             fi
         else
             print_error "Docker Compose is required. Please install it first." >&2
+            print_info "Installation commands:" >&2
+            echo "  Ubuntu/Debian: sudo apt-get install docker-compose-plugin" >&2
+            echo "  CentOS/RHEL: sudo yum install docker-compose-plugin" >&2
             return 1
         fi
+    fi
+    
+    # Final verification that DOCKER_COMPOSE_CMD is set
+    if [ -z "$DOCKER_COMPOSE_CMD" ]; then
+        print_error "Docker Compose command not set. This should not happen." >&2
+        return 1
+    fi
 fi
 
 # Check if Docker is running
@@ -1264,14 +1294,35 @@ build_and_start() {
     
     # Verify docker-compose command works before using it
     if [ -z "$DOCKER_COMPOSE_CMD" ]; then
-        print_error "Docker Compose command not set. Please run prerequisite check first."
-        return 1
+        print_warning "Docker Compose command not set. Attempting to detect..." >&2
+        
+        # Try to detect Docker Compose
+        if docker compose version >/dev/null 2>&1; then
+            if docker compose ps >/dev/null 2>&1; then
+                DOCKER_COMPOSE_CMD="docker compose"
+                print_success "Detected Docker Compose v2 plugin" >&2
+            fi
+        elif command_exists docker-compose; then
+            if docker-compose --version >/dev/null 2>&1; then
+                DOCKER_COMPOSE_CMD="docker-compose"
+                print_success "Detected Docker Compose v1" >&2
+            fi
+        fi
+        
+        if [ -z "$DOCKER_COMPOSE_CMD" ]; then
+            print_error "Docker Compose not found. Please run prerequisite check first."
+            print_info "Or install Docker Compose manually:" >&2
+            echo "  Ubuntu/Debian: sudo apt-get install docker-compose-plugin" >&2
+            echo "  CentOS/RHEL: sudo yum install docker-compose-plugin" >&2
+            return 1
+        fi
     fi
     
     # Test the command one more time before using it
     if ! test_docker_compose "$DOCKER_COMPOSE_CMD" >/dev/null 2>&1; then
         print_error "Docker Compose command is not working: $DOCKER_COMPOSE_CMD"
         print_info "Please run 'Install Prerequisites Only' to fix this issue."
+        print_info "Or try: $DOCKER_COMPOSE_CMD version" >&2
         return 1
     fi
     
@@ -1320,20 +1371,33 @@ run_migrations() {
 
 print_info "Waiting for database to be ready..."
     
+    # Get database user from .env file
+    local DB_USER=$(grep "^DB_USER=" .env 2>/dev/null | cut -d'=' -f2 | tr -d '"' || echo "postgres")
+    DB_USER=${DB_USER:-postgres}
+    
     # Wait for database with retries
     local db_ready=false
     for i in {1..30}; do
-        if $DOCKER_COMPOSE_CMD exec -T aether-postgres pg_isready -U postgres >/dev/null 2>&1; then
+        # Try pg_isready with the actual database user
+        if $DOCKER_COMPOSE_CMD exec -T aether-postgres pg_isready -U "$DB_USER" >/dev/null 2>&1; then
             db_ready=true
             break
         fi
-        printf "\rWaiting for database... (attempt $i/30) "
+        # Also try with postgres as fallback (in case DB_USER is different but postgres user exists)
+        if [ "$DB_USER" != "postgres" ] && $DOCKER_COMPOSE_CMD exec -T aether-postgres pg_isready -U postgres >/dev/null 2>&1; then
+            db_ready=true
+            break
+        fi
+        printf "\rWaiting for database... (attempt $i/30) " >&2
         sleep 2
     done
-    printf "\r"
+    printf "\r" >&2
     
     if [ "$db_ready" = false ]; then
         print_error "Database is not ready after 60 seconds"
+        print_info "Database user configured: $DB_USER"
+        print_info "Trying to check database status manually..."
+        $DOCKER_COMPOSE_CMD exec -T aether-postgres pg_isready -U "$DB_USER" || true
         return 1
     fi
     
