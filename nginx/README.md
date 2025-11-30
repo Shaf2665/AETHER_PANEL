@@ -1,15 +1,50 @@
 # Nginx Reverse Proxy Setup for Aether Dashboard
 
-This guide will help you set up nginx as a reverse proxy for Aether Dashboard with SSL/HTTPS support using Let's Encrypt.
+This guide will help you set up nginx as a reverse proxy for Aether Dashboard. The setup script can automatically configure nginx for you, or you can configure it manually using the templates provided.
+
+## Automatic Configuration (Recommended)
+
+The setup script (`setup.sh`) can automatically configure nginx during installation:
+
+1. Run the full installation: `./setup.sh` → Select "Full Installation"
+2. After Docker services start, the script will ask if you want to configure nginx
+3. Choose your SSL configuration:
+   - **Cloudflare Flexible SSL** (HTTP only, Cloudflare handles HTTPS)
+   - **Let's Encrypt** (HTTPS with SSL certificates on server)
+4. The script will automatically:
+   - Install nginx if needed
+   - Extract domain from `FRONTEND_URL`
+   - Copy and customize the appropriate template
+   - Test and reload nginx
+
+## Manual Configuration
+
+If you prefer to configure nginx manually, or if automatic configuration was skipped, follow the steps below.
+
+## Configuration Templates
+
+Two nginx configuration templates are available:
+
+### 1. Cloudflare Flexible SSL (`aether-dashboard-cloudflare.conf`)
+- **Use when**: You're using Cloudflare proxy (orange cloud) with Flexible SSL mode
+- **Configuration**: HTTP only (port 80)
+- **SSL**: Cloudflare handles HTTPS termination
+- **Best for**: Users already using Cloudflare
+
+### 2. Let's Encrypt (`aether-dashboard-letsencrypt.conf`)
+- **Use when**: You want SSL certificates directly on your server
+- **Configuration**: HTTP to HTTPS redirect + HTTPS server block (ports 80 and 443)
+- **SSL**: Let's Encrypt certificates managed by Certbot
+- **Best for**: Direct server SSL without Cloudflare
 
 ## Prerequisites
 
-- Aether Dashboard running on `http://localhost:5000`
+- Aether Dashboard running on `http://localhost:5000` (or your configured port)
 - Domain name pointing to your server (e.g., `dashboard.aetherpanel.com`)
 - Root or sudo access to your server
-- Port 80 and 443 open in your firewall
+- Port 80 (and 443 for Let's Encrypt) open in your firewall
 
-## Installation Steps
+## Manual Installation Steps
 
 ### 1. Install Nginx
 
@@ -31,7 +66,9 @@ sudo dnf install nginx -y
 sudo pacman -S nginx
 ```
 
-### 2. Install Certbot (Let's Encrypt)
+### 2. Install Certbot (Let's Encrypt) - Only if using Let's Encrypt template
+
+**Note:** Skip this step if you're using the Cloudflare template. Certbot is only needed for Let's Encrypt SSL certificates.
 
 **Ubuntu/Debian:**
 ```bash
@@ -50,15 +87,24 @@ sudo dnf install certbot python3-certbot-nginx -y
 sudo pacman -S certbot certbot-nginx
 ```
 
-### 3. Copy Configuration File
+### 3. Choose and Copy Configuration File
 
-Copy the nginx configuration file to the nginx sites-available directory:
+**Choose the appropriate template based on your setup:**
 
+**For Cloudflare Flexible SSL:**
 ```bash
-# Copy the configuration file
-sudo cp nginx/aether-dashboard.conf /etc/nginx/sites-available/aether-dashboard.conf
+# Copy the Cloudflare configuration file
+sudo cp nginx/aether-dashboard-cloudflare.conf /etc/nginx/sites-available/aether-dashboard.conf
+```
 
-# Create symbolic link to enable the site
+**For Let's Encrypt (HTTPS on server):**
+```bash
+# Copy the Let's Encrypt configuration file
+sudo cp nginx/aether-dashboard-letsencrypt.conf /etc/nginx/sites-available/aether-dashboard.conf
+```
+
+**Create symbolic link to enable the site:**
+```bash
 sudo ln -s /etc/nginx/sites-available/aether-dashboard.conf /etc/nginx/sites-enabled/
 ```
 
@@ -68,9 +114,9 @@ sudo ln -s /etc/nginx/sites-available/aether-dashboard.conf /etc/nginx/sites-ena
 sudo nano /etc/nginx/sites-available/aether-dashboard.conf
 ```
 
-Replace all occurrences of `dashboard.aetherpanel.com` with your domain name.
+Replace all occurrences of `dashboard.aetherpanel.com` with your domain name. Also update `localhost:5000` if your dashboard runs on a different port.
 
-### 4. Test Nginx Configuration
+### 4. Test Nginx Configuration (Both Templates)
 
 Before proceeding, test the nginx configuration:
 
@@ -84,26 +130,26 @@ nginx: the configuration file /etc/nginx/nginx.conf syntax is ok
 nginx: configuration file /etc/nginx/nginx.conf test is successful
 ```
 
-### 5. Create Directory for Let's Encrypt Verification
+### 5. Configure SSL (Let's Encrypt Template Only)
 
-Create the directory for Let's Encrypt verification:
+**Skip this section if using Cloudflare template.**
+
+#### 5.1. Create Directory for Let's Encrypt Verification
 
 ```bash
 sudo mkdir -p /var/www/certbot
 sudo chown -R www-data:www-data /var/www/certbot
 ```
 
-### 6. Temporarily Modify Configuration for Initial SSL Setup
+#### 5.2. Reload Nginx
 
-Before obtaining the SSL certificate, we need to temporarily allow HTTP access. The configuration file already includes this, but ensure nginx can serve the verification files.
-
-Reload nginx:
+Reload nginx to ensure it's running with the new configuration:
 
 ```bash
 sudo systemctl reload nginx
 ```
 
-### 7. Obtain SSL Certificate
+#### 5.3. Obtain SSL Certificate
 
 Obtain the SSL certificate using Certbot:
 
@@ -119,7 +165,7 @@ Certbot will:
 - Ask for your email address (for renewal notifications)
 - Ask if you want to redirect HTTP to HTTPS (choose "Yes")
 
-### 8. Verify SSL Certificate
+#### 5.4. Verify SSL Certificate
 
 After Certbot completes, verify the SSL certificate:
 
@@ -129,22 +175,17 @@ sudo certbot certificates
 
 You should see your certificate listed with expiration date.
 
-### 9. Test SSL Configuration
-
-Test your SSL configuration:
-
-```bash
-# Test nginx configuration
-sudo nginx -t
-
-# Reload nginx to apply changes
-sudo systemctl reload nginx
-```
-
-### 10. Verify Dashboard Access
+### 6. Verify Dashboard Access
 
 Test access to your dashboard:
 
+**For Cloudflare template:**
+```bash
+# Test HTTP access (Cloudflare will handle HTTPS)
+curl -I http://dashboard.aetherpanel.com
+```
+
+**For Let's Encrypt template:**
 ```bash
 # Test HTTP redirect (should redirect to HTTPS)
 curl -I http://dashboard.aetherpanel.com
@@ -153,12 +194,20 @@ curl -I http://dashboard.aetherpanel.com
 curl -I https://dashboard.aetherpanel.com
 ```
 
-Open your browser and navigate to `https://dashboard.aetherpanel.com` - you should see the dashboard with a valid SSL certificate.
+Open your browser and navigate to your domain - you should see the dashboard. With Cloudflare, HTTPS is automatic. With Let's Encrypt, use `https://`.
 
 ## Configuration Details
 
-### What the Configuration Does
+### What the Configurations Do
 
+**Cloudflare Template:**
+1. **HTTP Only**: Listens on port 80 (HTTP)
+2. **Cloudflare Integration**: Forwards Cloudflare-specific headers (CF-Connecting-IP, CF-Ray)
+3. **Proxy Headers**: Properly forwards `X-Forwarded-*` headers for Express trust proxy
+4. **WebSocket Support**: Ready for WebSocket connections if needed
+5. **Health Check**: Separate location block for health checks
+
+**Let's Encrypt Template:**
 1. **HTTP to HTTPS Redirect**: All HTTP traffic is automatically redirected to HTTPS
 2. **SSL/TLS**: Modern SSL configuration with TLS 1.2 and 1.3
 3. **Security Headers**: Adds security headers (HSTS, X-Frame-Options, etc.)
@@ -168,12 +217,17 @@ Open your browser and navigate to `https://dashboard.aetherpanel.com` - you shou
 
 ### Important Notes
 
-- The configuration proxies to `http://localhost:5000` - ensure your dashboard is running on this port
-- The Express application has trust proxy enabled, so it will correctly detect HTTPS
+- The configuration proxies to `http://localhost:5000` (or your configured port) - ensure your dashboard is running
+- The Express application has trust proxy enabled, so it will correctly detect HTTPS/proxy
 - Update `FRONTEND_URL` in your `.env` file to match your domain:
   ```bash
+  # For Cloudflare
+  FRONTEND_URL=https://dashboard.aetherpanel.com
+  
+  # For Let's Encrypt
   FRONTEND_URL=https://dashboard.aetherpanel.com
   ```
+- **Cloudflare users**: Set Cloudflare SSL/TLS mode to "Flexible" (HTTPS to Cloudflare, HTTP to origin)
 
 ## Troubleshooting
 

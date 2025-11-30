@@ -308,6 +308,19 @@ if (discordConfig.enabled) {
       res.redirect(`${frontendUrl}/login?error=discord_auth_failed`);
     }
   });
+} else {
+  // Discord routes when not enabled - return proper error messages
+  router.get('/discord', (req, res) => {
+    res.status(503).json({
+      error: 'Discord authentication is not enabled',
+      message: 'Please contact the administrator to enable Discord authentication'
+    });
+  });
+
+  router.get('/discord/callback', (req, res) => {
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+    res.redirect(`${frontendUrl}/login?error=discord_not_enabled`);
+  });
 }
 
 module.exports = router;

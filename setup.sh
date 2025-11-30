@@ -349,6 +349,274 @@ configure_firewall() {
 }
 
 # ============================================================================
+# Nginx Configuration Functions
+# ============================================================================
+
+extract_domain_from_url() {
+    local url=$1
+    # Remove protocol (http:// or https://)
+    url=${url#http://}
+    url=${url#https://}
+    # Remove path and port
+    url=${url%%/*}
+    url=${url%%:*}
+    echo "$url"
+}
+
+install_nginx_if_needed() {
+    if command_exists nginx; then
+        return 0
+    fi
+    
+    print_warning "Nginx is not installed."
+    echo ""
+    if ! confirm_action "Do you want to install nginx?" "Y"; then
+        return 1
+    fi
+    
+    local OS=$(detect_os)
+    print_info "Installing nginx..."
+    
+    case $OS in
+        ubuntu|debian)
+            if [ "$EUID" -eq 0 ]; then
+                apt update && apt install -y nginx
+            else
+                sudo apt update && sudo apt install -y nginx
+            fi
+            ;;
+        centos|rhel|fedora)
+            if [ "$EUID" -eq 0 ]; then
+                yum install -y nginx || dnf install -y nginx
+            else
+                sudo yum install -y nginx || sudo dnf install -y nginx
+            fi
+            ;;
+        arch)
+            if [ "$EUID" -eq 0 ]; then
+                pacman -S --noconfirm nginx
+            else
+                sudo pacman -S --noconfirm nginx
+            fi
+            ;;
+        *)
+            print_error "Automatic nginx installation not supported for this OS."
+            print_info "Please install nginx manually and run this script again."
+            return 1
+            ;;
+    esac
+    
+    if command_exists nginx; then
+        print_success "Nginx installed successfully"
+        return 0
+    else
+        print_error "Failed to install nginx"
+        return 1
+    fi
+}
+
+configure_nginx() {
+    print_header "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    print_header "Nginx Reverse Proxy Configuration"
+    print_header "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo ""
+    
+    # Check if FRONTEND_URL is set
+    if [ ! -f .env ]; then
+        print_error ".env file not found. Cannot configure nginx without FRONTEND_URL."
+        return 1
+    fi
+    
+    local FRONTEND_URL=$(grep "^FRONTEND_URL=" .env 2>/dev/null | cut -d'=' -f2- | tr -d '"' | tr -d "'")
+    if [ -z "$FRONTEND_URL" ]; then
+        print_warning "FRONTEND_URL not found in .env file. Skipping nginx configuration."
+        print_info "You can configure nginx manually later using the templates in nginx/ directory"
+        return 0
+    fi
+    
+    # Extract domain from FRONTEND_URL
+    local DOMAIN=$(extract_domain_from_url "$FRONTEND_URL")
+    if [ -z "$DOMAIN" ]; then
+        print_error "Could not extract domain from FRONTEND_URL: $FRONTEND_URL"
+        return 1
+    fi
+    
+    print_info "Detected domain: $DOMAIN"
+    echo ""
+    
+    # Ask if user wants to configure nginx
+    sync 2>/dev/null || true
+    if ! confirm_action "Do you want to configure nginx reverse proxy?" "Y"; then
+        print_info "Nginx configuration skipped. You can configure it manually later."
+        print_info "See nginx/README.md for manual configuration instructions"
+        return 0
+    fi
+    
+    # Check/install nginx
+    if ! install_nginx_if_needed; then
+        print_warning "Nginx installation failed or cancelled. Skipping nginx configuration."
+        return 0
+    fi
+    
+    # Ask user about SSL configuration
+    echo ""
+    print_info "Choose your SSL configuration:"
+    echo "  1. Cloudflare Flexible SSL (HTTP only, Cloudflare handles HTTPS)"
+    echo "  2. Let's Encrypt (HTTPS with SSL certificates on server)"
+    echo ""
+    
+    sync 2>/dev/null || true
+    local ssl_choice=""
+    while [ -z "$ssl_choice" ]; do
+        read -p "Enter choice (1 or 2, default: 1): " ssl_choice
+        ssl_choice=${ssl_choice:-1}
+        if [ "$ssl_choice" != "1" ] && [ "$ssl_choice" != "2" ]; then
+            print_error "Invalid choice. Please enter 1 or 2."
+            ssl_choice=""
+        fi
+    done
+    
+    # Determine which template to use
+    local template_file=""
+    local config_name="aether-dashboard"
+    
+    if [ "$ssl_choice" = "1" ]; then
+        # Cloudflare Flexible SSL
+        template_file="nginx/aether-dashboard-cloudflare.conf"
+        print_info "Using Cloudflare Flexible SSL configuration (HTTP only)"
+    else
+        # Let's Encrypt
+        template_file="nginx/aether-dashboard-letsencrypt.conf"
+        print_info "Using Let's Encrypt configuration (HTTPS with SSL certificates)"
+        print_warning "Note: You'll need to run certbot to obtain SSL certificates after nginx is configured"
+    fi
+    
+    # Check if template file exists
+    if [ ! -f "$template_file" ]; then
+        print_error "Template file not found: $template_file"
+        print_info "Make sure you're running this script from the project root directory"
+        return 1
+    fi
+    
+    # Get port from .env or use default
+    local PORT=$(grep "^PORT=" .env 2>/dev/null | cut -d'=' -f2 | tr -d '"' || echo "5000")
+    PORT=${PORT:-5000}
+    
+    # Create nginx config directory if it doesn't exist
+    local nginx_sites_available="/etc/nginx/sites-available"
+    local nginx_sites_enabled="/etc/nginx/sites-enabled"
+    
+    if [ "$EUID" -ne 0 ]; then
+        if [ ! -d "$nginx_sites_available" ] || [ ! -w "$nginx_sites_available" ] 2>/dev/null; then
+            print_warning "Need sudo access to configure nginx"
+            if ! sudo -n true 2>/dev/null; then
+                print_info "You may be prompted for your password"
+            fi
+        fi
+    fi
+    
+    # Copy template and replace domain
+    local target_config="$nginx_sites_available/$config_name.conf"
+    
+    print_info "Creating nginx configuration..."
+    if [ "$EUID" -eq 0 ]; then
+        sed "s/dashboard.aetherpanel.com/$DOMAIN/g" "$template_file" | \
+        sed "s/localhost:5000/localhost:$PORT/g" > "$target_config"
+    else
+        sed "s/dashboard.aetherpanel.com/$DOMAIN/g" "$template_file" | \
+        sed "s/localhost:5000/localhost:$PORT/g" | sudo tee "$target_config" > /dev/null
+    fi
+    
+    if [ $? -ne 0 ]; then
+        print_error "Failed to create nginx configuration file"
+        return 1
+    fi
+    
+    print_success "Nginx configuration file created: $target_config"
+    
+    # Create symlink in sites-enabled
+    print_info "Enabling nginx site..."
+    if [ "$EUID" -eq 0 ]; then
+        if [ -L "$nginx_sites_enabled/$config_name.conf" ]; then
+            rm "$nginx_sites_enabled/$config_name.conf"
+        fi
+        ln -s "$target_config" "$nginx_sites_enabled/$config_name.conf"
+    else
+        if [ -L "$nginx_sites_enabled/$config_name.conf" ]; then
+            sudo rm "$nginx_sites_enabled/$config_name.conf"
+        fi
+        sudo ln -s "$target_config" "$nginx_sites_enabled/$config_name.conf"
+    fi
+    
+    if [ $? -ne 0 ]; then
+        print_error "Failed to create symlink in sites-enabled"
+        return 1
+    fi
+    
+    print_success "Nginx site enabled"
+    
+    # Test nginx configuration
+    echo ""
+    print_info "Testing nginx configuration..."
+    if [ "$EUID" -eq 0 ]; then
+        if nginx -t >/dev/null 2>&1; then
+            print_success "Nginx configuration test passed"
+        else
+            print_error "Nginx configuration test failed"
+            print_info "Run 'sudo nginx -t' to see the error details"
+            return 1
+        fi
+    else
+        if sudo nginx -t >/dev/null 2>&1; then
+            print_success "Nginx configuration test passed"
+        else
+            print_error "Nginx configuration test failed"
+            print_info "Run 'sudo nginx -t' to see the error details"
+            return 1
+        fi
+    fi
+    
+    # Reload nginx
+    echo ""
+    print_info "Reloading nginx..."
+    if [ "$EUID" -eq 0 ]; then
+        if systemctl reload nginx >/dev/null 2>&1 || service nginx reload >/dev/null 2>&1; then
+            print_success "Nginx reloaded successfully"
+        else
+            print_warning "Failed to reload nginx. You may need to restart it manually:"
+            echo "  sudo systemctl restart nginx"
+        fi
+    else
+        if sudo systemctl reload nginx >/dev/null 2>&1 || sudo service nginx reload >/dev/null 2>&1; then
+            print_success "Nginx reloaded successfully"
+        else
+            print_warning "Failed to reload nginx. You may need to restart it manually:"
+            echo "  sudo systemctl restart nginx"
+        fi
+    fi
+    
+    echo ""
+    print_success "Nginx reverse proxy configured successfully!"
+    echo ""
+    
+    if [ "$ssl_choice" = "2" ]; then
+        print_warning "Next steps for Let's Encrypt SSL:"
+        echo "  1. Install certbot: sudo apt install certbot python3-certbot-nginx"
+        echo "  2. Obtain certificate: sudo certbot --nginx -d $DOMAIN"
+        echo "  3. Certbot will automatically update the nginx configuration"
+    else
+        print_info "Cloudflare configuration complete!"
+        print_info "Make sure:"
+        echo "  1. Your domain DNS points to this server"
+        echo "  2. Cloudflare proxy (orange cloud) is enabled"
+        echo "  3. Cloudflare SSL/TLS mode is set to 'Flexible'"
+    fi
+    
+    echo ""
+    return 0
+}
+
+# ============================================================================
 # Prerequisite Installation Functions
 # ============================================================================
 
@@ -1769,6 +2037,7 @@ main() {
             build_and_start || exit 1
             run_migrations
             verify_installation
+            configure_nginx
             show_summary
             ;;
         "config")
