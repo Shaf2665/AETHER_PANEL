@@ -1717,7 +1717,14 @@ print_info "Starting services..."
 
 echo ""
 print_info "Waiting for services to be ready..."
-    sleep 5
+
+# Check if this is first-time setup (no existing volume)
+if ! docker volume ls 2>/dev/null | grep -q "aether.*postgres"; then
+    print_info "First-time database setup detected, waiting 30 seconds..."
+    sleep 30
+else
+    sleep 15  # Increased from 5 seconds
+fi
 }
 
 # ============================================================================
@@ -1750,18 +1757,55 @@ print_info "Waiting for database to be ready..."
     # Wait for database with retries
     local db_ready=false
     for i in {1..30}; do
+        # First check if container is running
+        if ! $DOCKER_COMPOSE_CMD ps 2>/dev/null | grep -q "aether-postgres.*Up"; then
+            printf "\rWaiting for container to start... (attempt $i/30) " >&2
+            # Progressive backoff for container wait
+            if [ $i -lt 10 ]; then
+                sleep 5
+            elif [ $i -lt 20 ]; then
+                sleep 10
+            else
+                sleep 15
+            fi
+            continue
+        fi
+        
         # Try pg_isready with the actual database user
-        if $DOCKER_COMPOSE_CMD exec -T aether-postgres pg_isready -U "$DB_USER" >/dev/null 2>&1; then
-            db_ready=true
-            break
+        local pg_output=""
+        if pg_output=$($DOCKER_COMPOSE_CMD exec -T aether-postgres pg_isready -U "$DB_USER" 2>&1); then
+            if echo "$pg_output" | grep -q "accepting connections"; then
+                db_ready=true
+                break
+            fi
         fi
+        
         # Also try with postgres as fallback (in case DB_USER is different but postgres user exists)
-        if [ "$DB_USER" != "postgres" ] && $DOCKER_COMPOSE_CMD exec -T aether-postgres pg_isready -U postgres >/dev/null 2>&1; then
-            db_ready=true
-            break
+        if [ "$DB_USER" != "postgres" ]; then
+            if pg_output=$($DOCKER_COMPOSE_CMD exec -T aether-postgres pg_isready -U postgres 2>&1); then
+                if echo "$pg_output" | grep -q "accepting connections"; then
+                    db_ready=true
+                    break
+                fi
+            fi
         fi
+        
+        # Show error for debugging (only on last few attempts)
+        if [ $i -gt 25 ]; then
+            echo "" >&2
+            print_warning "Database not ready yet. Last error: $pg_output" >&2
+        fi
+        
         printf "\rWaiting for database... (attempt $i/30) " >&2
-        sleep 10
+        
+        # Progressive backoff
+        if [ $i -lt 10 ]; then
+            sleep 5   # Check more frequently initially
+        elif [ $i -lt 20 ]; then
+            sleep 10  # Then every 10 seconds
+        else
+            sleep 15  # Finally every 15 seconds
+        fi
     done
     printf "\r" >&2
     
