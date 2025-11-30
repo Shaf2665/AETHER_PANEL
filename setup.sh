@@ -800,9 +800,8 @@ check_prerequisites() {
         print_error "Docker Compose command not set. This should not happen." >&2
         return 1
     fi
-fi
-
-# Check if Docker is running
+    
+    # Check if Docker is running
 if docker info >/dev/null 2>&1; then
         print_success "Docker daemon is running" >&2
     else
