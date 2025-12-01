@@ -194,6 +194,32 @@ After the setup script completes, you may need to complete a few manual steps de
    - The SSL certificate should be valid and trusted
    - HTTP requests will automatically redirect to HTTPS
 
+#### Database Migrations
+
+After the setup script completes and services are running, you **must** run database migrations to initialize the database schema:
+
+```bash
+# Run database migrations
+docker-compose exec aether-dashboard npm run migrate
+```
+
+**Important Notes:**
+- This step is **required** after first installation
+- The migration command is **idempotent** - it's safe to run multiple times
+- If migrations have already been applied, the command will complete without errors
+- Wait for all Docker containers to be running before executing migrations
+- You can verify container status with: `docker-compose ps`
+
+**What this does:**
+- Creates all necessary database tables (users, servers, transactions, settings, etc.)
+- Sets up database indexes and constraints
+- Initializes default settings for Pterodactyl integration
+
+**Troubleshooting migrations:**
+- If you see "relation does not exist" errors, ensure migrations have run
+- If containers aren't running, start them first: `docker-compose up -d`
+- Check container logs: `docker-compose logs aether-dashboard`
+
 #### Troubleshooting
 
 - **Dashboard not accessible via domain**: 

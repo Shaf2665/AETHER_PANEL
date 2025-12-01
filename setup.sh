@@ -2132,9 +2132,8 @@ show_menu() {
     echo -e "  [${GREEN}2${NC}] Full Installation (Recommended)" >&2
     echo -e "  [${GREEN}3${NC}] Configuration Only (Create .env file)" >&2
     echo -e "  [${GREEN}4${NC}] Build & Start Services" >&2
-    echo -e "  [${GREEN}5${NC}] Run Database Migrations" >&2
-    echo -e "  [${GREEN}6${NC}] Verify Installation" >&2
-    echo -e "  [${GREEN}7${NC}] Exit" >&2
+    echo -e "  [${GREEN}5${NC}] Verify Installation" >&2
+    echo -e "  [${GREEN}6${NC}] Exit" >&2
     echo "" >&2
     
     # Force output flush before reading
@@ -2142,7 +2141,7 @@ show_menu() {
     
     # Use explicit prompt with -p flag for better compatibility
     # Read from terminal directly, output prompt to stderr
-    read -r -p "Enter your choice [1-7]: " choice </dev/tty 2>/dev/null || read -r -p "Enter your choice [1-7]: " choice
+    read -r -p "Enter your choice [1-6]: " choice </dev/tty 2>/dev/null || read -r -p "Enter your choice [1-6]: " choice
     
     # Output choice to stdout (for command substitution) and error messages to stderr
     case $choice in
@@ -2150,9 +2149,8 @@ show_menu() {
         2) echo "full" ;;
         3) echo "config" ;;
         4) echo "build" ;;
-        5) echo "migrate" ;;
-        6) echo "verify" ;;
-        7) echo "exit" ;;
+        5) echo "verify" ;;
+        6) echo "exit" ;;
         *)
             print_error "Invalid choice" >&2
             return 1
@@ -2185,7 +2183,6 @@ main() {
             check_prerequisites || exit 1
             create_configuration
             build_and_start || exit 1
-            run_migrations
             verify_installation
             configure_nginx
             show_summary
@@ -2202,10 +2199,6 @@ main() {
         "build")
             check_prerequisites || exit 1
             build_and_start
-            ;;
-        "migrate")
-            check_prerequisites || exit 1
-            run_migrations
             ;;
         "verify")
             check_prerequisites || exit 1
