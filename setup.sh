@@ -120,7 +120,6 @@ get_vps_ip() {
         fi
     fi
     
-echo ""
     return 1
 }
 
@@ -825,7 +824,7 @@ install_docker_compose() {
         if test_docker_compose "docker compose"; then
             local COMPOSE_VERSION=$(docker compose version | awk '{print $4}')
             print_success "Docker Compose installed successfully (version: $COMPOSE_VERSION) - v2 plugin"
-        DOCKER_COMPOSE_CMD="docker compose"
+            DOCKER_COMPOSE_CMD="docker compose"
             return 0
         fi
     fi
@@ -858,7 +857,7 @@ install_docker_compose() {
             if test_docker_compose "docker-compose"; then
                 local COMPOSE_VERSION=$(docker-compose --version | awk '{print $3}' | sed 's/,//')
                 print_success "Docker Compose v1 now works with python3-distutils"
-        DOCKER_COMPOSE_CMD="docker-compose"
+                DOCKER_COMPOSE_CMD="docker-compose"
                 return 0
             fi
         fi
@@ -1120,10 +1119,10 @@ check_prerequisites() {
     if [ -z "$DOCKER_COMPOSE_CMD" ]; then
         print_error "Docker Compose command not set. This should not happen." >&2
         return 1
-fi
+    fi
 
-# Check if Docker is running
-if docker info >/dev/null 2>&1; then
+    # Check if Docker is running
+    if docker info >/dev/null 2>&1; then
         print_success "Docker daemon is running" >&2
 else
         print_error "Docker daemon is not running" >&2
@@ -1142,7 +1141,7 @@ else
         else
             print_error "Docker daemon must be running. Please start it and try again." >&2
             return 1
-fi
+        fi
     fi
     
     echo "" >&2
@@ -1706,8 +1705,8 @@ build_and_start() {
         return 1
     fi
 
-echo ""
-print_info "Starting services..."
+    echo ""
+    print_info "Starting services..."
     if $DOCKER_COMPOSE_CMD up -d; then
         print_success "Services started successfully"
     else
@@ -1715,8 +1714,8 @@ print_info "Starting services..."
         return 1
     fi
 
-echo ""
-print_info "Waiting for services to be ready..."
+    echo ""
+    print_info "Waiting for services to be ready..."
 
 # Check if this is first-time setup (no existing volume)
 if ! docker volume ls 2>/dev/null | grep -q "aether.*postgres"; then
@@ -1850,7 +1849,7 @@ run_migrations() {
         $DOCKER_COMPOSE_CMD ps aether-postgres 2>/dev/null || true
         print_info "Trying to check database status manually..."
         $DOCKER_COMPOSE_CMD exec -T aether-postgres pg_isready -U "$DB_USER" 2>&1 || true
-        print_warning "You may need to run migrations manually: docker-compose exec aether-dashboard npm run migrate"
+        print_warning "You may need to run migrations manually: $DOCKER_COMPOSE_CMD exec aether-dashboard npm run migrate"
         return 1
     fi
     
