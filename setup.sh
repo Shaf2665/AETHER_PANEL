@@ -1748,7 +1748,7 @@ run_migrations() {
         return 1
     fi
 
-print_info "Waiting for database to be ready..."
+    print_info "Waiting for database to be ready..."
     
     # Get database user from .env file
     local DB_USER=$(grep "^DB_USER=" .env 2>/dev/null | cut -d'=' -f2 | tr -d '"' || echo "postgres")
@@ -1756,9 +1756,14 @@ print_info "Waiting for database to be ready..."
     
     # Wait for database with retries
     local db_ready=false
+    local container_ready=false
+    
     for i in {1..30}; do
-        # First check if container is running
-        if ! $DOCKER_COMPOSE_CMD ps 2>/dev/null | grep -q "aether-postgres.*Up"; then
+        # Step 1: Check if container exists and is running
+        local container_status=""
+        container_status=$($DOCKER_COMPOSE_CMD ps aether-postgres 2>/dev/null | grep -v "^NAME" | grep "aether-postgres" || echo "")
+        
+        if [ -z "$container_status" ]; then
             printf "\rWaiting for container to start... (attempt $i/30) " >&2
             # Progressive backoff for container wait
             if [ $i -lt 10 ]; then
@@ -1771,29 +1776,58 @@ print_info "Waiting for database to be ready..."
             continue
         fi
         
-        # Try pg_isready with the actual database user
+        # Step 2: Check if container is "Up" (running)
+        if echo "$container_status" | grep -qE "Up|healthy"; then
+            container_ready=true
+            
+            # On first detection of container being up, wait a bit for PostgreSQL to fully initialize
+            if [ $i -eq 1 ] || [ "$db_ready" = false ]; then
+                sleep 3  # Give PostgreSQL a few seconds to be fully ready
+            fi
+        else
+            printf "\rWaiting for container to be ready... (attempt $i/30) " >&2
+            if [ $i -lt 10 ]; then
+                sleep 5
+            elif [ $i -lt 20 ]; then
+                sleep 10
+            else
+                sleep 15
+            fi
+            continue
+        fi
+        
+        # Step 3: Try pg_isready with the actual database user
         local pg_output=""
-        if pg_output=$($DOCKER_COMPOSE_CMD exec -T aether-postgres pg_isready -U "$DB_USER" 2>&1); then
-            if echo "$pg_output" | grep -q "accepting connections"; then
+        local pg_exit_code=0
+        
+        # Try pg_isready command
+        pg_output=$($DOCKER_COMPOSE_CMD exec -T aether-postgres pg_isready -U "$DB_USER" 2>&1)
+        pg_exit_code=$?
+        
+        if [ $pg_exit_code -eq 0 ] && echo "$pg_output" | grep -q "accepting connections"; then
+            db_ready=true
+            break
+        fi
+        
+        # Step 4: Also try with postgres as fallback (in case DB_USER is different but postgres user exists)
+        if [ "$db_ready" = false ] && [ "$DB_USER" != "postgres" ]; then
+            pg_output=$($DOCKER_COMPOSE_CMD exec -T aether-postgres pg_isready -U postgres 2>&1)
+            pg_exit_code=$?
+            
+            if [ $pg_exit_code -eq 0 ] && echo "$pg_output" | grep -q "accepting connections"; then
                 db_ready=true
                 break
             fi
         fi
         
-        # Also try with postgres as fallback (in case DB_USER is different but postgres user exists)
-        if [ "$DB_USER" != "postgres" ]; then
-            if pg_output=$($DOCKER_COMPOSE_CMD exec -T aether-postgres pg_isready -U postgres 2>&1); then
-                if echo "$pg_output" | grep -q "accepting connections"; then
-                    db_ready=true
-                    break
-                fi
-            fi
-        fi
-        
-        # Show error for debugging (only on last few attempts)
+        # Step 5: Show error for debugging (only on last few attempts)
         if [ $i -gt 25 ]; then
             echo "" >&2
-            print_warning "Database not ready yet. Last error: $pg_output" >&2
+            if [ "$container_ready" = true ]; then
+                print_warning "Container is running but database not ready yet. Last error: ${pg_output:-Unknown error}" >&2
+            else
+                print_warning "Container not ready. Status: ${container_status:-Not found}" >&2
+            fi
         fi
         
         printf "\rWaiting for database... (attempt $i/30) " >&2
@@ -1812,22 +1846,41 @@ print_info "Waiting for database to be ready..."
     if [ "$db_ready" = false ]; then
         print_error "Database is not ready after 300 seconds"
         print_info "Database user configured: $DB_USER"
+        print_info "Container status:"
+        $DOCKER_COMPOSE_CMD ps aether-postgres 2>/dev/null || true
         print_info "Trying to check database status manually..."
-        $DOCKER_COMPOSE_CMD exec -T aether-postgres pg_isready -U "$DB_USER" || true
+        $DOCKER_COMPOSE_CMD exec -T aether-postgres pg_isready -U "$DB_USER" 2>&1 || true
+        print_warning "You may need to run migrations manually: docker-compose exec aether-dashboard npm run migrate"
         return 1
     fi
     
     print_success "Database is ready"
     sleep 2
 
-print_info "Running database migrations..."
+    print_info "Running database migrations..."
     
-if $DOCKER_COMPOSE_CMD exec -T aether-dashboard npm run migrate >/dev/null 2>&1; then
-    print_success "Database migrations completed"
+    # Run migrations with better error handling
+    local migrate_output=""
+    local migrate_exit_code=0
+    
+    # Run migration command and capture both output and exit code
+    migrate_output=$($DOCKER_COMPOSE_CMD exec -T aether-dashboard npm run migrate 2>&1)
+    migrate_exit_code=$?
+    
+    if [ $migrate_exit_code -eq 0 ]; then
+        print_success "Database migrations completed"
         return 0
-else
-    print_warning "Migration command returned an error, but this might be normal if migrations already ran"
-        return 0  # Don't fail if migrations already ran
+    else
+        # Check if migrations already ran (common case)
+        if echo "$migrate_output" | grep -qiE "already exists|duplicate|already applied"; then
+            print_success "Database migrations already completed (tables exist)"
+            return 0
+        else
+            print_warning "Migration command returned exit code $migrate_exit_code"
+            echo "$migrate_output" >&2
+            print_info "This might be normal if migrations already ran. Check the output above."
+            return 0  # Don't fail if migrations already ran
+        fi
     fi
 }
 
