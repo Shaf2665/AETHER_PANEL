@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from 'react-query';
 import api from '../services/api';
 import toast from 'react-hot-toast';
+import { useTheme } from '../contexts/ThemeContext';
 import {
   ShieldCheckIcon,
   UsersIcon,
@@ -54,6 +55,37 @@ const Admin = () => {
   const [settingsLoading, setSettingsLoading] = useState(false);
   const [linkvertiseLoading, setLinkvertiseLoading] = useState(false);
   const [updateModalOpen, setUpdateModalOpen] = useState(false);
+  const { theme, previewTheme, updateTheme } = useTheme();
+  const [themeSettings, setThemeSettings] = useState({
+    colors: {
+      primary: '#3b82f6',
+      secondary: '#8b5cf6',
+      sidebarBg: 'linear-gradient(to bottom, #1f2937, #111827)',
+      sidebarText: '#ffffff',
+      sidebarHover: 'rgba(255, 255, 255, 0.1)',
+      navActive: 'linear-gradient(to right, #3b82f6, #06b6d4)',
+      background: 'linear-gradient(to bottom right, #f3f4f6, #e5e7eb)',
+      cardBg: 'rgba(255, 255, 255, 0.8)',
+      textPrimary: '#111827',
+      textSecondary: '#6b7280',
+    },
+    navigation: {
+      dashboard: 'linear-gradient(to right, #3b82f6, #06b6d4)',
+      servers: 'linear-gradient(to right, #a855f7, #ec4899)',
+      earnCoins: 'linear-gradient(to right, #10b981, #14b8a6)',
+      store: 'linear-gradient(to right, #f59e0b, #f97316)',
+      admin: 'linear-gradient(to right, #ef4444, #f43f5e)',
+    },
+    background: {
+      image: '',
+      overlay: 'rgba(0, 0, 0, 0)',
+      position: 'center',
+      size: 'cover',
+      repeat: 'no-repeat',
+    },
+    customCSS: '',
+  });
+  const [themeLoading, setThemeLoading] = useState(false);
 
   // Fetch system statistics
   const { data: stats, isLoading: statsLoading } = useQuery('adminStats', async () => {
@@ -266,6 +298,62 @@ const Admin = () => {
       },
     }
   );
+
+  // Fetch theme settings
+  const { data: themeData, isLoading: themeDataLoading, refetch: refetchTheme } = useQuery(
+    'themeSettings',
+    async () => {
+      const res = await api.get('/admin/settings/theme');
+      return res.data;
+    },
+    {
+      onSuccess: (data) => {
+        setThemeSettings(data);
+      },
+    }
+  );
+
+  // Update theme mutation
+  const updateThemeMutation = useMutation(
+    async (themeConfig) => {
+      const res = await api.put('/admin/settings/theme', themeConfig);
+      return res.data;
+    },
+    {
+      onSuccess: (data) => {
+        toast.success('Theme settings updated successfully');
+        setThemeSettings(data.config);
+        updateTheme(data.config);
+        queryClient.invalidateQueries('themeSettings');
+      },
+      onError: (error) => {
+        toast.error(error.response?.data?.error || 'Failed to update theme settings');
+      },
+    }
+  );
+
+  const handleSaveTheme = (e) => {
+    e.preventDefault();
+    setThemeLoading(true);
+    updateThemeMutation.mutate(themeSettings, {
+      onSettled: () => {
+        setThemeLoading(false);
+      },
+    });
+  };
+
+  const handlePreviewTheme = () => {
+    previewTheme(themeSettings);
+  };
+
+  const handleResetTheme = () => {
+    if (theme) {
+      setThemeSettings(theme);
+      previewTheme(theme);
+    } else {
+      refetchTheme();
+    }
+  };
 
   // Update Linkvertise settings mutation
   const updateLinkvertiseMutation = useMutation(
@@ -849,7 +937,7 @@ const Admin = () => {
           {/* Settings Tab */}
           {activeTab === 'settings' && (
             <div>
-              {pterodactylLoading || linkvertiseDataLoading ? (
+              {pterodactylLoading || linkvertiseDataLoading || themeDataLoading ? (
                 <div className="flex justify-center py-12">
                   <ArrowPathIcon className="h-8 w-8 animate-spin text-indigo-600" />
                 </div>
@@ -1125,6 +1213,271 @@ const Admin = () => {
                         </button>
                       </div>
                     </form>
+                  </div>
+
+                  {/* Theme Editor */}
+                  <div>
+                    <h2 className="text-xl font-semibold mb-4 text-gray-800">Theme Editor</h2>
+                    <p className="text-sm text-gray-600 mb-6">
+                      Customize your dashboard appearance including colors, gradients, and background images.
+                    </p>
+
+                    {themeDataLoading ? (
+                      <div className="flex justify-center py-12">
+                        <ArrowPathIcon className="h-8 w-8 animate-spin text-indigo-600" />
+                      </div>
+                    ) : (
+                      <form onSubmit={handleSaveTheme} className="bg-white rounded-lg border border-gray-200 p-6 space-y-6">
+                        {/* Color Settings */}
+                        <div>
+                          <h3 className="text-lg font-medium text-gray-900 mb-4">Colors</h3>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-2">Primary Color</label>
+                              <div className="flex gap-2">
+                                <input
+                                  type="color"
+                                  value={themeSettings.colors?.primary?.replace(/[^#0-9A-Fa-f]/g, '') || '#3b82f6'}
+                                  onChange={(e) => setThemeSettings({
+                                    ...themeSettings,
+                                    colors: { ...themeSettings.colors, primary: e.target.value }
+                                  })}
+                                  className="h-10 w-20 rounded border border-gray-300"
+                                />
+                                <input
+                                  type="text"
+                                  value={themeSettings.colors?.primary || '#3b82f6'}
+                                  onChange={(e) => setThemeSettings({
+                                    ...themeSettings,
+                                    colors: { ...themeSettings.colors, primary: e.target.value }
+                                  })}
+                                  className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                                  placeholder="#3b82f6 or linear-gradient(...)"
+                                />
+                              </div>
+                            </div>
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-2">Secondary Color</label>
+                              <div className="flex gap-2">
+                                <input
+                                  type="color"
+                                  value={themeSettings.colors?.secondary?.replace(/[^#0-9A-Fa-f]/g, '') || '#8b5cf6'}
+                                  onChange={(e) => setThemeSettings({
+                                    ...themeSettings,
+                                    colors: { ...themeSettings.colors, secondary: e.target.value }
+                                  })}
+                                  className="h-10 w-20 rounded border border-gray-300"
+                                />
+                                <input
+                                  type="text"
+                                  value={themeSettings.colors?.secondary || '#8b5cf6'}
+                                  onChange={(e) => setThemeSettings({
+                                    ...themeSettings,
+                                    colors: { ...themeSettings.colors, secondary: e.target.value }
+                                  })}
+                                  className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                                  placeholder="#8b5cf6 or linear-gradient(...)"
+                                />
+                              </div>
+                            </div>
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-2">Sidebar Background</label>
+                              <input
+                                type="text"
+                                value={themeSettings.colors?.sidebarBg || ''}
+                                onChange={(e) => setThemeSettings({
+                                  ...themeSettings,
+                                  colors: { ...themeSettings.colors, sidebarBg: e.target.value }
+                                })}
+                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                                placeholder="linear-gradient(to bottom, #1f2937, #111827)"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-2">Sidebar Text</label>
+                              <div className="flex gap-2">
+                                <input
+                                  type="color"
+                                  value={themeSettings.colors?.sidebarText?.replace(/[^#0-9A-Fa-f]/g, '') || '#ffffff'}
+                                  onChange={(e) => setThemeSettings({
+                                    ...themeSettings,
+                                    colors: { ...themeSettings.colors, sidebarText: e.target.value }
+                                  })}
+                                  className="h-10 w-20 rounded border border-gray-300"
+                                />
+                                <input
+                                  type="text"
+                                  value={themeSettings.colors?.sidebarText || '#ffffff'}
+                                  onChange={(e) => setThemeSettings({
+                                    ...themeSettings,
+                                    colors: { ...themeSettings.colors, sidebarText: e.target.value }
+                                  })}
+                                  className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                                />
+                              </div>
+                            </div>
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-2">Card Background</label>
+                              <input
+                                type="text"
+                                value={themeSettings.colors?.cardBg || ''}
+                                onChange={(e) => setThemeSettings({
+                                  ...themeSettings,
+                                  colors: { ...themeSettings.colors, cardBg: e.target.value }
+                                })}
+                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                                placeholder="rgba(255, 255, 255, 0.8)"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-2">Main Background</label>
+                              <input
+                                type="text"
+                                value={themeSettings.colors?.background || ''}
+                                onChange={(e) => setThemeSettings({
+                                  ...themeSettings,
+                                  colors: { ...themeSettings.colors, background: e.target.value }
+                                })}
+                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                                placeholder="linear-gradient(...)"
+                              />
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Navigation Colors */}
+                        <div>
+                          <h3 className="text-lg font-medium text-gray-900 mb-4">Navigation Item Colors</h3>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            {['dashboard', 'servers', 'earnCoins', 'store', 'admin'].map((navItem) => (
+                              <div key={navItem}>
+                                <label className="block text-sm font-medium text-gray-700 mb-2 capitalize">
+                                  {navItem === 'earnCoins' ? 'Earn Coins' : navItem}
+                                </label>
+                                <input
+                                  type="text"
+                                  value={themeSettings.navigation?.[navItem] || ''}
+                                  onChange={(e) => setThemeSettings({
+                                    ...themeSettings,
+                                    navigation: { ...themeSettings.navigation, [navItem]: e.target.value }
+                                  })}
+                                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                                  placeholder="linear-gradient(to right, #3b82f6, #06b6d4)"
+                                />
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+
+                        {/* Background Image */}
+                        <div>
+                          <h3 className="text-lg font-medium text-gray-900 mb-4">Background Image</h3>
+                          <div className="space-y-4">
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-2">Image URL</label>
+                              <input
+                                type="url"
+                                value={themeSettings.background?.image || ''}
+                                onChange={(e) => setThemeSettings({
+                                  ...themeSettings,
+                                  background: { ...themeSettings.background, image: e.target.value }
+                                })}
+                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                                placeholder="https://example.com/image.jpg"
+                              />
+                            </div>
+                            <div className="grid grid-cols-2 gap-4">
+                              <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-2">Position</label>
+                                <select
+                                  value={themeSettings.background?.position || 'center'}
+                                  onChange={(e) => setThemeSettings({
+                                    ...themeSettings,
+                                    background: { ...themeSettings.background, position: e.target.value }
+                                  })}
+                                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                                >
+                                  <option value="center">Center</option>
+                                  <option value="top">Top</option>
+                                  <option value="bottom">Bottom</option>
+                                  <option value="left">Left</option>
+                                  <option value="right">Right</option>
+                                </select>
+                              </div>
+                              <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-2">Size</label>
+                                <select
+                                  value={themeSettings.background?.size || 'cover'}
+                                  onChange={(e) => setThemeSettings({
+                                    ...themeSettings,
+                                    background: { ...themeSettings.background, size: e.target.value }
+                                  })}
+                                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                                >
+                                  <option value="cover">Cover</option>
+                                  <option value="contain">Contain</option>
+                                  <option value="auto">Auto</option>
+                                </select>
+                              </div>
+                            </div>
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-2">Overlay Color</label>
+                              <input
+                                type="text"
+                                value={themeSettings.background?.overlay || 'rgba(0, 0, 0, 0)'}
+                                onChange={(e) => setThemeSettings({
+                                  ...themeSettings,
+                                  background: { ...themeSettings.background, overlay: e.target.value }
+                                })}
+                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                                placeholder="rgba(0, 0, 0, 0.5)"
+                              />
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Custom CSS */}
+                        <div>
+                          <h3 className="text-lg font-medium text-gray-900 mb-4">Custom CSS</h3>
+                          <textarea
+                            value={themeSettings.customCSS || ''}
+                            onChange={(e) => setThemeSettings({
+                              ...themeSettings,
+                              customCSS: e.target.value
+                            })}
+                            rows={6}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 font-mono text-sm"
+                            placeholder="/* Add your custom CSS here */"
+                          />
+                          <p className="mt-1 text-sm text-gray-500">Add custom CSS to further customize your dashboard</p>
+                        </div>
+
+                        {/* Actions */}
+                        <div className="flex justify-end space-x-3 pt-4 border-t border-gray-200">
+                          <button
+                            type="button"
+                            onClick={handleResetTheme}
+                            className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors"
+                          >
+                            Reset
+                          </button>
+                          <button
+                            type="button"
+                            onClick={handlePreviewTheme}
+                            className="px-4 py-2 border border-indigo-300 rounded-lg text-indigo-700 hover:bg-indigo-50 transition-colors"
+                          >
+                            Preview
+                          </button>
+                          <button
+                            type="submit"
+                            disabled={themeLoading}
+                            className="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            {themeLoading ? 'Saving...' : 'Save Theme'}
+                          </button>
+                        </div>
+                      </form>
+                    )}
                   </div>
 
                   {/* System Update */}

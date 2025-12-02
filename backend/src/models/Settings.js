@@ -116,6 +116,99 @@ class Settings {
       };
     }
   }
+
+  /**
+   * Get default theme configuration
+   * @returns {Object} Default theme configuration object
+   */
+  static getDefaultThemeConfig() {
+    return {
+      colors: {
+        primary: '#3b82f6',
+        secondary: '#8b5cf6',
+        sidebarBg: 'linear-gradient(to bottom, #1f2937, #111827)',
+        sidebarText: '#ffffff',
+        sidebarHover: 'rgba(255, 255, 255, 0.1)',
+        navActive: 'linear-gradient(to right, #3b82f6, #06b6d4)',
+        background: 'linear-gradient(to bottom right, #f3f4f6, #e5e7eb)',
+        cardBg: 'rgba(255, 255, 255, 0.8)',
+        textPrimary: '#111827',
+        textSecondary: '#6b7280',
+      },
+      navigation: {
+        dashboard: 'linear-gradient(to right, #3b82f6, #06b6d4)',
+        servers: 'linear-gradient(to right, #a855f7, #ec4899)',
+        earnCoins: 'linear-gradient(to right, #10b981, #14b8a6)',
+        store: 'linear-gradient(to right, #f59e0b, #f97316)',
+        admin: 'linear-gradient(to right, #ef4444, #f43f5e)',
+      },
+      background: {
+        image: '',
+        overlay: 'rgba(0, 0, 0, 0)',
+        position: 'center',
+        size: 'cover',
+        repeat: 'no-repeat',
+      },
+      customCSS: '',
+    };
+  }
+
+  /**
+   * Get theme configuration from settings
+   * @returns {Promise<Object>} Theme configuration object
+   */
+  static async getThemeConfig() {
+    try {
+      const themeConfigStr = await this.get('theme_config');
+      if (!themeConfigStr) {
+        return this.getDefaultThemeConfig();
+      }
+
+      const themeConfig = JSON.parse(themeConfigStr);
+      
+      // Merge with defaults to ensure all properties exist
+      const defaults = this.getDefaultThemeConfig();
+      return {
+        colors: { ...defaults.colors, ...(themeConfig.colors || {}) },
+        navigation: { ...defaults.navigation, ...(themeConfig.navigation || {}) },
+        background: { ...defaults.background, ...(themeConfig.background || {}) },
+        customCSS: themeConfig.customCSS || '',
+      };
+    } catch (error) {
+      console.error('Error getting theme config:', error);
+      return this.getDefaultThemeConfig();
+    }
+  }
+
+  /**
+   * Set theme configuration
+   * @param {Object} config - Theme configuration object
+   * @returns {Promise<void>}
+   */
+  static async setThemeConfig(config) {
+    try {
+      // Validate config structure
+      if (!config || typeof config !== 'object') {
+        throw new Error('Theme config must be an object');
+      }
+
+      // Ensure all required sections exist
+      const defaults = this.getDefaultThemeConfig();
+      const validatedConfig = {
+        colors: { ...defaults.colors, ...(config.colors || {}) },
+        navigation: { ...defaults.navigation, ...(config.navigation || {}) },
+        background: { ...defaults.background, ...(config.background || {}) },
+        customCSS: config.customCSS || '',
+      };
+
+      // Stringify and save
+      const configStr = JSON.stringify(validatedConfig);
+      await this.set('theme_config', configStr);
+    } catch (error) {
+      console.error('Error setting theme config:', error);
+      throw error;
+    }
+  }
 }
 
 module.exports = Settings;

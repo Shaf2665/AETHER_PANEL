@@ -476,6 +476,76 @@ router.put('/settings/linkvertise', [
   }
 });
 
+// Theme Settings Routes
+
+// Get theme configuration
+router.get('/settings/theme', async (req, res, next) => {
+  try {
+    const themeConfig = await Settings.getThemeConfig();
+    res.json(themeConfig);
+  } catch (error) {
+    next(error);
+  }
+});
+
+// Update theme configuration
+router.put(
+  '/settings/theme',
+  [
+    body('colors').optional().isObject(),
+    body('colors.primary').optional().isString(),
+    body('colors.secondary').optional().isString(),
+    body('colors.sidebarBg').optional().isString(),
+    body('colors.sidebarText').optional().isString(),
+    body('colors.sidebarHover').optional().isString(),
+    body('colors.navActive').optional().isString(),
+    body('colors.background').optional().isString(),
+    body('colors.cardBg').optional().isString(),
+    body('colors.textPrimary').optional().isString(),
+    body('colors.textSecondary').optional().isString(),
+    body('navigation').optional().isObject(),
+    body('navigation.dashboard').optional().isString(),
+    body('navigation.servers').optional().isString(),
+    body('navigation.earnCoins').optional().isString(),
+    body('navigation.store').optional().isString(),
+    body('navigation.admin').optional().isString(),
+    body('background').optional().isObject(),
+    body('background.image').optional().isString(),
+    body('background.overlay').optional().isString(),
+    body('background.position').optional().isString(),
+    body('background.size').optional().isString(),
+    body('background.repeat').optional().isString(),
+    body('customCSS').optional().isString().isLength({ max: 10000 }),
+    validate
+  ],
+  async (req, res, next) => {
+    try {
+      const updates = req.body;
+      
+      // Get current config
+      const currentConfig = await Settings.getThemeConfig();
+      
+      // Merge updates
+      const updatedConfig = {
+        colors: { ...currentConfig.colors, ...(updates.colors || {}) },
+        navigation: { ...currentConfig.navigation, ...(updates.navigation || {}) },
+        background: { ...currentConfig.background, ...(updates.background || {}) },
+        customCSS: updates.customCSS !== undefined ? updates.customCSS : currentConfig.customCSS,
+      };
+      
+      // Save updated config
+      await Settings.setThemeConfig(updatedConfig);
+      
+      res.json({ 
+        message: 'Theme settings updated successfully', 
+        config: updatedConfig 
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
 // System Update Routes
 
 // Get update status

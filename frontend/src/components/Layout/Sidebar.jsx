@@ -31,18 +31,33 @@ const Sidebar = () => {
     });
   }
 
+  const getNavGradient = (href) => {
+    if (href === '/') return 'var(--theme-nav-dashboard)';
+    if (href === '/servers') return 'var(--theme-nav-servers)';
+    if (href === '/earn') return 'var(--theme-nav-earnCoins)';
+    if (href === '/store') return 'var(--theme-nav-store)';
+    if (href === '/admin') return 'var(--theme-nav-admin)';
+    return 'var(--theme-nav-active)';
+  };
+
   return (
-    <div className="w-64 bg-gradient-to-b from-gray-900 via-gray-800 to-gray-900 h-screen shadow-2xl relative flex flex-col">
+    <div 
+      className="w-64 h-screen shadow-2xl relative flex flex-col"
+      style={{ background: 'var(--theme-sidebar-bg)' }}
+    >
       <div className="p-6 border-b border-gray-700/50 flex-shrink-0">
         <div className="flex items-center space-x-3">
           <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 via-purple-500 to-pink-500 flex items-center justify-center shadow-lg">
             <SparklesIcon className="h-6 w-6 text-white" />
           </div>
           <div>
-            <h2 className="text-white text-xl font-bold bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">
+            <h2 
+              className="text-xl font-bold bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent"
+              style={{ color: 'var(--theme-sidebar-text)' }}
+            >
               Aether
             </h2>
-            <p className="text-xs text-gray-400">Dashboard</p>
+            <p className="text-xs" style={{ color: 'var(--theme-text-secondary)' }}>Dashboard</p>
           </div>
         </div>
       </div>
@@ -55,14 +70,28 @@ const Sidebar = () => {
               to={item.href}
               className={`group relative flex items-center px-4 py-3 text-sm font-medium rounded-xl mb-2 transition-all duration-200 ${
                 isActive
-                  ? `bg-gradient-to-r ${item.gradient} text-white shadow-lg transform scale-105`
-                  : 'text-gray-300 hover:text-white hover:bg-gray-800/50'
+                  ? 'text-white shadow-lg transform scale-105'
+                  : 'hover:text-white'
               }`}
+              style={{
+                background: isActive ? getNavGradient(item.href) : 'transparent',
+                color: isActive ? 'white' : 'var(--theme-sidebar-text)',
+              }}
+              onMouseEnter={(e) => {
+                if (!isActive) {
+                  e.currentTarget.style.background = 'var(--theme-sidebar-hover)';
+                }
+              }}
+              onMouseLeave={(e) => {
+                if (!isActive) {
+                  e.currentTarget.style.background = 'transparent';
+                }
+              }}
             >
               {isActive && (
                 <div className={`absolute left-0 top-0 bottom-0 w-1 bg-white rounded-r-full`}></div>
               )}
-              <item.icon className={`mr-3 h-5 w-5 ${isActive ? 'text-white' : 'text-gray-400 group-hover:text-white'} transition-colors`} />
+              <item.icon className={`mr-3 h-5 w-5 ${isActive ? 'text-white' : ''} transition-colors`} style={{ color: isActive ? 'white' : 'var(--theme-sidebar-text)' }} />
               <span className="relative z-10">{item.name}</span>
               {isActive && (
                 <div className="absolute inset-0 bg-white/10 rounded-xl blur-sm"></div>

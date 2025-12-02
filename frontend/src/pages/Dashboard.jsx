@@ -40,6 +40,7 @@ const AnimatedCounter = ({ value, suffix = '' }) => {
 
 const Dashboard = () => {
   const { user } = useAuth();
+  const { theme: themeSettings } = useTheme();
 
   const { data: balance } = useQuery('balance', async () => {
     const res = await api.get('/coins/balance');
@@ -115,24 +116,51 @@ const Dashboard = () => {
   ];
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-blue-50 to-purple-50">
+    <div 
+      className="min-h-screen"
+      style={{ 
+        background: 'var(--theme-background)',
+        backgroundImage: 'var(--theme-background-image)',
+        backgroundPosition: 'var(--theme-background-position)',
+        backgroundSize: 'var(--theme-background-size)',
+        backgroundRepeat: 'var(--theme-background-repeat)',
+        position: 'relative'
+      }}
+    >
+      {themeSettings?.background?.image && (
+        <div 
+          className="absolute inset-0"
+          style={{ 
+            backgroundColor: themeSettings.background.overlay,
+            zIndex: -1
+          }}
+        />
+      )}
       <div className="mb-8">
-        <h1 className="text-4xl font-bold bg-gradient-to-r from-gray-900 via-blue-900 to-purple-900 bg-clip-text text-transparent mb-2">
+        <h1 
+          className="text-4xl font-bold bg-clip-text text-transparent mb-2"
+          style={{ 
+            background: 'linear-gradient(to right, var(--theme-text-primary), var(--theme-primary), var(--theme-secondary))',
+            WebkitBackgroundClip: 'text',
+            WebkitTextFillColor: 'transparent'
+          }}
+        >
           Dashboard
         </h1>
-        <p className="text-gray-600">Welcome back, {user?.username || 'User'}! Here's your overview.</p>
+        <p style={{ color: 'var(--theme-text-secondary)' }}>Welcome back, {user?.username || 'User'}! Here's your overview.</p>
       </div>
       
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
         {stats.map((stat, index) => (
           <div
             key={stat.name}
-            className={`bg-gradient-to-br ${stat.bgGradient} rounded-xl shadow-lg p-6 transform transition-all duration-300 hover:scale-105 hover:shadow-2xl border border-white/50`}
+            className="rounded-xl shadow-lg p-6 transform transition-all duration-300 hover:scale-105 hover:shadow-2xl border border-white/50"
+            style={{ background: 'var(--theme-card-bg)' }}
             style={{ animationDelay: `${index * 100}ms` }}
           >
             <div className="flex items-center justify-between">
               <div className="flex-1">
-                <p className="text-sm font-medium text-gray-600 mb-2">{stat.name}</p>
+                <p className="text-sm font-medium mb-2" style={{ color: 'var(--theme-text-secondary)' }}>{stat.name}</p>
                 <p className={`text-3xl font-bold bg-gradient-to-r ${stat.gradient} bg-clip-text text-transparent`}>
                   <AnimatedCounter value={stat.value} suffix={stat.suffix || ''} />
                 </p>
@@ -145,8 +173,11 @@ const Dashboard = () => {
         ))}
       </div>
 
-      <div className="bg-white/80 backdrop-blur-lg rounded-2xl shadow-xl p-8 border border-white/50">
-        <h2 className="text-2xl font-bold text-gray-900 mb-6 flex items-center">
+      <div 
+        className="backdrop-blur-lg rounded-2xl shadow-xl p-8 border border-white/50"
+        style={{ background: 'var(--theme-card-bg)' }}
+      >
+        <h2 className="text-2xl font-bold mb-6 flex items-center" style={{ color: 'var(--theme-text-primary)' }}>
           <SparklesIcon className="h-6 w-6 mr-2 text-purple-500" />
           Quick Actions
         </h2>

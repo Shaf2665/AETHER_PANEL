@@ -42,6 +42,16 @@ async function migrate() {
       console.warn('⚠️  Update audit migration file not found, skipping...');
     }
     
+    // Run theme settings migration
+    const themeSettingsPath = path.join(__dirname, 'migrate-theme-settings.sql');
+    if (fs.existsSync(themeSettingsPath)) {
+      const themeSettings = fs.readFileSync(themeSettingsPath, 'utf8');
+      await pool.query(themeSettings);
+      console.log('✅ Theme settings migration completed');
+    } else {
+      console.warn('⚠️  Theme settings migration file not found, skipping...');
+    }
+    
     console.log('✅ Database migration completed successfully');
     process.exit(0);
   } catch (error) {

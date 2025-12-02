@@ -31,11 +31,21 @@ const Navbar = () => {
   };
 
   return (
-    <nav className="bg-white/80 backdrop-blur-lg shadow-lg border-b border-gray-200/50 sticky top-0 z-50">
+    <nav 
+      className="backdrop-blur-lg shadow-lg border-b border-gray-200/50 sticky top-0 z-50"
+      style={{ background: 'var(--theme-card-bg)' }}
+    >
       <div className="px-6 py-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center">
-            <h1 className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+            <h1 
+              className="text-2xl font-bold bg-clip-text text-transparent"
+              style={{ 
+                background: 'linear-gradient(to right, var(--theme-primary), var(--theme-secondary))',
+                WebkitBackgroundClip: 'text',
+                WebkitTextFillColor: 'transparent'
+              }}
+            >
               Aether Dashboard
             </h1>
           </div>
@@ -66,15 +76,18 @@ const Navbar = () => {
                     getInitials(user?.username)
                   )}
                 </div>
-                <span className="font-medium text-gray-700 hidden md:block">{user?.username}</span>
+                <span className="font-medium hidden md:block" style={{ color: 'var(--theme-text-primary)' }}>{user?.username}</span>
                 <ChevronDownIcon className={`h-4 w-4 text-gray-600 transition-transform duration-200 ${dropdownOpen ? 'rotate-180' : ''}`} />
               </button>
 
               {dropdownOpen && (
                 <div className="absolute right-0 mt-2 w-56 bg-white rounded-xl shadow-2xl border border-gray-200 overflow-hidden animate-fadeIn">
-                  <div className="p-4 border-b border-gray-200 bg-gradient-to-r from-blue-50 to-purple-50">
-                    <p className="text-sm font-medium text-gray-900">{user?.username}</p>
-                    <p className="text-xs text-gray-500 mt-1">{user?.email || 'Discord User'}</p>
+                  <div 
+                    className="p-4 border-b border-gray-200"
+                    style={{ background: 'var(--theme-card-bg)' }}
+                  >
+                    <p className="text-sm font-medium" style={{ color: 'var(--theme-text-primary)' }}>{user?.username}</p>
+                    <p className="text-xs mt-1" style={{ color: 'var(--theme-text-secondary)' }}>{user?.email || 'Discord User'}</p>
                   </div>
                   <div className="p-2">
                     <button

@@ -20,6 +20,9 @@ import Sidebar from './components/Layout/Sidebar';
 // Auth context
 import { useAuth } from './contexts/AuthContext';
 
+// Theme context
+import { ThemeProvider } from './contexts/ThemeContext';
+
 import './App.css';
 
 const queryClient = new QueryClient({
@@ -70,8 +73,9 @@ function AdminRoute({ children }) {
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <Router>
-        <div className="min-h-screen bg-gray-50">
+      <ThemeProvider>
+        <Router>
+          <div className="min-h-screen bg-gray-50">
           <Routes>
             <Route path="/login" element={<Login />} />
             <Route path="/register" element={<Register />} />
@@ -109,6 +113,7 @@ function App() {
           <Toaster position="top-right" />
         </div>
       </Router>
+      </ThemeProvider>
     </QueryClientProvider>
   );
 }

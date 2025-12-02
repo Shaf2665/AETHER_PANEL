@@ -2,6 +2,35 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Theme CSS Variables - Default values */
+:root {
+  /* Color Variables */
+  --theme-primary: #3b82f6;
+  --theme-secondary: #8b5cf6;
+  --theme-sidebar-bg: linear-gradient(to bottom, #1f2937, #111827);
+  --theme-sidebar-text: #ffffff;
+  --theme-sidebar-hover: rgba(255, 255, 255, 0.1);
+  --theme-nav-active: linear-gradient(to right, #3b82f6, #06b6d4);
+  --theme-background: linear-gradient(to bottom right, #f3f4f6, #e5e7eb);
+  --theme-card-bg: rgba(255, 255, 255, 0.8);
+  --theme-text-primary: #111827;
+  --theme-text-secondary: #6b7280;
+
+  /* Navigation Variables */
+  --theme-nav-dashboard: linear-gradient(to right, #3b82f6, #06b6d4);
+  --theme-nav-servers: linear-gradient(to right, #a855f7, #ec4899);
+  --theme-nav-earnCoins: linear-gradient(to right, #10b981, #14b8a6);
+  --theme-nav-store: linear-gradient(to right, #f59e0b, #f97316);
+  --theme-nav-admin: linear-gradient(to right, #ef4444, #f43f5e);
+
+  /* Background Variables */
+  --theme-background-image: none;
+  --theme-background-overlay: rgba(0, 0, 0, 0);
+  --theme-background-position: center;
+  --theme-background-size: cover;
+  --theme-background-repeat: no-repeat;
+}
+
 body {
   margin: 0;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
@@ -71,18 +100,19 @@ html {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: linear-gradient(to bottom, #3b82f6, #8b5cf6);
+  background: linear-gradient(to bottom, var(--theme-primary), var(--theme-secondary));
   border-radius: 10px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: linear-gradient(to bottom, #2563eb, #7c3aed);
+  background: linear-gradient(to bottom, var(--theme-primary), var(--theme-secondary));
+  opacity: 0.8;
 }
 
 /* Firefox Scrollbar */
 * {
   scrollbar-width: thin;
-  scrollbar-color: #3b82f6 #f1f1f1;
+  scrollbar-color: var(--theme-primary) #f1f1f1;
 }
 
 /* Global Transitions */
@@ -94,12 +124,12 @@ html {
 
 /* Selection Color */
 ::selection {
-  background-color: rgba(59, 130, 246, 0.3);
+  background-color: color-mix(in srgb, var(--theme-primary) 30%, transparent);
   color: inherit;
 }
 
 ::-moz-selection {
-  background-color: rgba(59, 130, 246, 0.3);
+  background-color: color-mix(in srgb, var(--theme-primary) 30%, transparent);
   color: inherit;
 }
 

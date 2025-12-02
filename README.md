@@ -28,6 +28,7 @@ A comprehensive game server hosting dashboard that integrates with Pterodactyl P
   - Daily login bonuses
 - 🌐 **Subdomain Support** - Easy subdomain setup with Cloudflare DNS configuration
 - 🎨 **Modern UI** - Beautiful, responsive interface with glassmorphism effects, gradients, and animations
+- 🎨 **Theme Editor** - Customize your dashboard appearance with colors, gradients, background images, and custom CSS directly from the Admin Panel
 - ⚙️ **Easy Setup** - Interactive setup wizard with automatic prerequisite installation
 
 ## Tech Stack
@@ -458,6 +459,68 @@ docker-compose exec aether-dashboard npm run migrate
 - Check migration logs in the update modal
 - Run migrations manually: `docker-compose exec aether-dashboard npm run migrate`
 
+## Theme Customization
+
+The Aether Dashboard includes a built-in theme editor that allows administrators to customize the dashboard appearance directly from the Admin Panel.
+
+### Accessing the Theme Editor
+
+1. Log in as an administrator
+2. Navigate to **Admin Panel** → **Settings** tab
+3. Scroll down to the **Theme Editor** section
+
+### Available Customizations
+
+- **Colors**: Customize primary, secondary, sidebar, and text colors
+- **Navigation Colors**: Set individual gradient colors for each navigation item (Dashboard, Servers, Earn Coins, Store, Admin)
+- **Background Image**: Add a custom background image with overlay, position, and size options
+- **Custom CSS**: Add your own CSS for advanced customization
+
+### Using the Theme Editor
+
+1. **Preview Changes**: Click the "Preview" button to see changes without saving
+2. **Save Theme**: Click "Save Theme" to apply changes permanently
+3. **Reset**: Click "Reset" to revert to the default theme
+
+### Theme Configuration Structure
+
+The theme configuration is stored in the database and includes:
+
+```json
+{
+  "colors": {
+    "primary": "#3b82f6",
+    "secondary": "#8b5cf6",
+    "sidebarBg": "linear-gradient(to bottom, #1f2937, #111827)",
+    "sidebarText": "#ffffff",
+    "cardBg": "rgba(255, 255, 255, 0.8)",
+    "background": "linear-gradient(to bottom right, #f3f4f6, #e5e7eb)",
+    "textPrimary": "#111827",
+    "textSecondary": "#6b7280"
+  },
+  "navigation": {
+    "dashboard": "linear-gradient(to right, #3b82f6, #06b6d4)",
+    "servers": "linear-gradient(to right, #a855f7, #ec4899)",
+    "earnCoins": "linear-gradient(to right, #10b981, #14b8a6)",
+    "store": "linear-gradient(to right, #f59e0b, #f97316)",
+    "admin": "linear-gradient(to right, #ef4444, #f43f5e)"
+  },
+  "background": {
+    "image": "",
+    "overlay": "rgba(0, 0, 0, 0)",
+    "position": "center",
+    "size": "cover",
+    "repeat": "no-repeat"
+  },
+  "customCSS": ""
+}
+```
+
+### API Endpoints
+
+- `GET /api/admin/settings/theme` - Get current theme configuration
+- `PUT /api/admin/settings/theme` - Update theme configuration
+
 ## Configuration
 
 All configuration is done through environment variables in the `.env` file. See [DOCKER.md](DOCKER.md) for a complete list of configuration options.
@@ -587,6 +650,8 @@ See [DOCKER.md](DOCKER.md) for detailed configuration options.
 - `GET /api/admin/servers` - Get all servers with pagination and filters
 - `GET /api/admin/transactions` - Get all transactions with pagination and filters
 - `GET /api/admin/revenue` - Get revenue analytics (by source, daily, top earners)
+- `GET /api/admin/settings/theme` - Get theme configuration
+- `PUT /api/admin/settings/theme` - Update theme configuration
 - `GET /api/admin/system/update/status` - Get system update status and logs
 - `GET /api/admin/system/update/logs` - Get update logs
 - `POST /api/admin/system/update` - Start system update (requires `ENABLE_SYSTEM_UPDATE=true`)
