@@ -209,6 +209,61 @@ class Settings {
       throw error;
     }
   }
+
+  /**
+   * Get branding configuration from settings
+   * @returns {Promise<Object>} Branding configuration object
+   */
+  static async getBrandingConfig() {
+    try {
+      const settings = await this.getAll();
+      return {
+        dashboardName: settings.dashboard_name || 'Aether Dashboard',
+        dashboardShortName: settings.dashboard_short_name || 'Aether',
+        sidebarLogoUrl: settings.sidebar_logo_url || '',
+        mainLogoUrl: settings.main_logo_url || '',
+      };
+    } catch (error) {
+      console.error('Error getting branding config:', error);
+      return {
+        dashboardName: 'Aether Dashboard',
+        dashboardShortName: 'Aether',
+        sidebarLogoUrl: '',
+        mainLogoUrl: '',
+      };
+    }
+  }
+
+  /**
+   * Set branding configuration
+   * @param {Object} config - Branding configuration object
+   * @returns {Promise<void>}
+   */
+  static async setBrandingConfig(config) {
+    try {
+      // Validate config structure
+      if (!config || typeof config !== 'object') {
+        throw new Error('Branding config must be an object');
+      }
+
+      // Validate and set each field
+      if (config.dashboardName !== undefined) {
+        await this.set('dashboard_name', String(config.dashboardName || 'Aether Dashboard'));
+      }
+      if (config.dashboardShortName !== undefined) {
+        await this.set('dashboard_short_name', String(config.dashboardShortName || 'Aether'));
+      }
+      if (config.sidebarLogoUrl !== undefined) {
+        await this.set('sidebar_logo_url', String(config.sidebarLogoUrl || ''));
+      }
+      if (config.mainLogoUrl !== undefined) {
+        await this.set('main_logo_url', String(config.mainLogoUrl || ''));
+      }
+    } catch (error) {
+      console.error('Error setting branding config:', error);
+      throw error;
+    }
+  }
 }
 
 module.exports = Settings;

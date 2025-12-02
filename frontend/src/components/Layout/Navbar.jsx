@@ -1,11 +1,13 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
+import { useTheme } from '../../contexts/ThemeContext';
 import { CurrencyDollarIcon, UserIcon, ChevronDownIcon, ArrowRightOnRectangleIcon } from '@heroicons/react/24/outline';
 import { useQuery } from 'react-query';
 import api from '../../services/api';
 
 const Navbar = () => {
   const { user, logout } = useAuth();
+  const { branding } = useTheme();
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const dropdownRef = useRef(null);
 
@@ -37,17 +39,25 @@ const Navbar = () => {
     >
       <div className="px-6 py-4">
         <div className="flex items-center justify-between">
-          <div className="flex items-center">
-            <h1 
-              className="text-2xl font-bold bg-clip-text text-transparent"
-              style={{ 
-                background: 'linear-gradient(to right, var(--theme-primary), var(--theme-secondary))',
-                WebkitBackgroundClip: 'text',
-                WebkitTextFillColor: 'transparent'
-              }}
-            >
-              Aether Dashboard
-            </h1>
+          <div className="flex items-center space-x-3">
+            {branding?.mainLogoUrl ? (
+              <img
+                src={branding.mainLogoUrl}
+                alt="Logo"
+                className="h-10 object-contain"
+              />
+            ) : (
+              <h1 
+                className="text-2xl font-bold bg-clip-text text-transparent"
+                style={{ 
+                  background: 'linear-gradient(to right, var(--theme-primary), var(--theme-secondary))',
+                  WebkitBackgroundClip: 'text',
+                  WebkitTextFillColor: 'transparent'
+                }}
+              >
+                {branding?.dashboardName || 'Aether Dashboard'}
+              </h1>
+            )}
           </div>
           <div className="flex items-center space-x-4">
             {/* Coins Display */}

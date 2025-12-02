@@ -19,7 +19,8 @@ import {
   Cog6ToothIcon,
   ExclamationTriangleIcon,
   CheckCircleIcon,
-  InformationCircleIcon
+  InformationCircleIcon,
+  SparklesIcon
 } from '@heroicons/react/24/outline';
 
 const Admin = () => {
@@ -61,6 +62,15 @@ const Admin = () => {
   const [linkvertiseLoading, setLinkvertiseLoading] = useState(false);
   const [updateModalOpen, setUpdateModalOpen] = useState(false);
   const { theme, previewTheme, updateTheme } = useTheme();
+  const [brandingSettings, setBrandingSettings] = useState({
+    dashboardName: 'Aether Dashboard',
+    dashboardShortName: 'Aether',
+    sidebarLogoUrl: '',
+    mainLogoUrl: '',
+  });
+  const [brandingLoading, setBrandingLoading] = useState(false);
+  const sidebarLogoInputRef = React.useRef(null);
+  const mainLogoInputRef = React.useRef(null);
   const [themeSettings, setThemeSettings] = useState({
     colors: {
       primary: '#3b82f6',
@@ -359,6 +369,114 @@ const Admin = () => {
     } else {
       refetchTheme();
     }
+  };
+
+  // Fetch branding settings
+  const { data: brandingData, isLoading: brandingDataLoading, refetch: refetchBranding } = useQuery(
+    'brandingSettings',
+    async () => {
+      const res = await api.get('/admin/settings/branding');
+      return res.data;
+    },
+    {
+      onSuccess: (data) => {
+        setBrandingSettings(data);
+      },
+    }
+  );
+
+  // Update branding mutation
+  const updateBrandingMutation = useMutation(
+    async (brandingConfig) => {
+      const res = await api.put('/admin/settings/branding', brandingConfig);
+      return res.data;
+    },
+    {
+      onSuccess: (data) => {
+        toast.success('Branding settings updated successfully');
+        setBrandingSettings(data.config);
+        queryClient.invalidateQueries('brandingSettings');
+        // Reload page to apply branding changes
+        setTimeout(() => {
+          window.location.reload();
+        }, 1000);
+      },
+      onError: (error) => {
+        toast.error(error.response?.data?.error || 'Failed to update branding settings');
+      },
+    }
+  );
+
+  const handleSaveBranding = (e) => {
+    e.preventDefault();
+    setBrandingLoading(true);
+    updateBrandingMutation.mutate(brandingSettings, {
+      onSettled: () => {
+        setBrandingLoading(false);
+      },
+    });
+  };
+
+  // Handle sidebar logo upload
+  const handleSidebarLogoUpload = (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    
+    const validTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp', 'image/svg+xml'];
+    if (!validTypes.includes(file.type)) {
+      toast.error('Please select a valid image file (JPG, PNG, GIF, WEBP, or SVG)');
+      return;
+    }
+    
+    if (file.size > 2 * 1024 * 1024) {
+      toast.error('Image size must be less than 2MB');
+      return;
+    }
+    
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const dataUrl = e.target.result;
+      setBrandingSettings({
+        ...brandingSettings,
+        sidebarLogoUrl: dataUrl
+      });
+      toast.success('Sidebar logo uploaded successfully');
+    };
+    reader.onerror = () => {
+      toast.error('Failed to read image file');
+    };
+    reader.readAsDataURL(file);
+  };
+
+  // Handle main logo upload
+  const handleMainLogoUpload = (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    
+    const validTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp', 'image/svg+xml'];
+    if (!validTypes.includes(file.type)) {
+      toast.error('Please select a valid image file (JPG, PNG, GIF, WEBP, or SVG)');
+      return;
+    }
+    
+    if (file.size > 2 * 1024 * 1024) {
+      toast.error('Image size must be less than 2MB');
+      return;
+    }
+    
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const dataUrl = e.target.result;
+      setBrandingSettings({
+        ...brandingSettings,
+        mainLogoUrl: dataUrl
+      });
+      toast.success('Main logo uploaded successfully');
+    };
+    reader.onerror = () => {
+      toast.error('Failed to read image file');
+    };
+    reader.readAsDataURL(file);
   };
 
   // Helper functions for gradient and color parsing
@@ -1263,6 +1381,183 @@ const Admin = () => {
                         className="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                         {themeLoading ? 'Saving...' : 'Save Theme'}
+                      </button>
+                    </div>
+                  </form>
+                )}
+              </div>
+
+              {/* Branding */}
+              <div>
+                <h2 className="text-xl font-semibold mb-4 text-gray-800">Branding</h2>
+                <p className="text-sm text-gray-600 mb-6">
+                  Customize your dashboard name and logos to match your company or startup branding.
+                </p>
+
+                {brandingDataLoading ? (
+                  <div className="flex justify-center py-12">
+                    <ArrowPathIcon className="h-8 w-8 animate-spin text-indigo-600" />
+                  </div>
+                ) : (
+                  <form onSubmit={handleSaveBranding} className="bg-white rounded-lg border border-gray-200 p-6 space-y-6">
+                    {/* Dashboard Names */}
+                    <div>
+                      <h3 className="text-lg font-medium text-gray-900 mb-4">Dashboard Names</h3>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">Dashboard Name (Full)</label>
+                          <input
+                            type="text"
+                            value={brandingSettings.dashboardName}
+                            onChange={(e) => setBrandingSettings({
+                              ...brandingSettings,
+                              dashboardName: e.target.value
+                            })}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                            placeholder="Aether Dashboard"
+                            maxLength={100}
+                          />
+                          <p className="mt-1 text-sm text-gray-500">Displayed in the navbar and main areas</p>
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">Short Name</label>
+                          <input
+                            type="text"
+                            value={brandingSettings.dashboardShortName}
+                            onChange={(e) => setBrandingSettings({
+                              ...brandingSettings,
+                              dashboardShortName: e.target.value
+                            })}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                            placeholder="Aether"
+                            maxLength={50}
+                          />
+                          <p className="mt-1 text-sm text-gray-500">Displayed in the sidebar (optional)</p>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Logos */}
+                    <div>
+                      <h3 className="text-lg font-medium text-gray-900 mb-4">Logos</h3>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        {/* Sidebar Logo */}
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">Sidebar Logo</label>
+                          <div className="space-y-3">
+                            {brandingSettings.sidebarLogoUrl ? (
+                              <div className="flex items-center space-x-3">
+                                <img
+                                  src={brandingSettings.sidebarLogoUrl}
+                                  alt="Sidebar Logo"
+                                  className="w-16 h-16 object-contain rounded-lg border border-gray-300"
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => setBrandingSettings({
+                                    ...brandingSettings,
+                                    sidebarLogoUrl: ''
+                                  })}
+                                  className="px-3 py-1 text-sm text-red-600 hover:text-red-700 border border-red-300 rounded-lg hover:bg-red-50"
+                                >
+                                  Remove
+                                </button>
+                              </div>
+                            ) : (
+                              <div className="w-16 h-16 rounded-lg border-2 border-dashed border-gray-300 flex items-center justify-center bg-gray-50">
+                                <SparklesIcon className="h-8 w-8 text-gray-400" />
+                              </div>
+                            )}
+                            <div className="flex gap-2">
+                              <input
+                                type="file"
+                                ref={sidebarLogoInputRef}
+                                onChange={handleSidebarLogoUpload}
+                                accept="image/jpeg,image/jpg,image/png,image/gif,image/webp,image/svg+xml"
+                                className="hidden"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => sidebarLogoInputRef.current?.click()}
+                                className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition-colors"
+                              >
+                                {brandingSettings.sidebarLogoUrl ? 'Change Logo' : 'Upload Logo'}
+                              </button>
+                            </div>
+                            <p className="text-sm text-gray-500">Recommended size: 40x40px. Max 2MB. Formats: JPG, PNG, GIF, WEBP, SVG</p>
+                          </div>
+                        </div>
+
+                        {/* Main Logo */}
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">Main Logo (Optional)</label>
+                          <div className="space-y-3">
+                            {brandingSettings.mainLogoUrl ? (
+                              <div className="flex items-center space-x-3">
+                                <img
+                                  src={brandingSettings.mainLogoUrl}
+                                  alt="Main Logo"
+                                  className="h-12 object-contain rounded-lg border border-gray-300"
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => setBrandingSettings({
+                                    ...brandingSettings,
+                                    mainLogoUrl: ''
+                                  })}
+                                  className="px-3 py-1 text-sm text-red-600 hover:text-red-700 border border-red-300 rounded-lg hover:bg-red-50"
+                                >
+                                  Remove
+                                </button>
+                              </div>
+                            ) : (
+                              <div className="h-12 rounded-lg border-2 border-dashed border-gray-300 flex items-center justify-center bg-gray-50">
+                                <span className="text-sm text-gray-400">No logo (text will be used)</span>
+                              </div>
+                            )}
+                            <div className="flex gap-2">
+                              <input
+                                type="file"
+                                ref={mainLogoInputRef}
+                                onChange={handleMainLogoUpload}
+                                accept="image/jpeg,image/jpg,image/png,image/gif,image/webp,image/svg+xml"
+                                className="hidden"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => mainLogoInputRef.current?.click()}
+                                className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition-colors"
+                              >
+                                {brandingSettings.mainLogoUrl ? 'Change Logo' : 'Upload Logo'}
+                              </button>
+                            </div>
+                            <p className="text-sm text-gray-500">Recommended size: 120x40px. Max 2MB. Formats: JPG, PNG, GIF, WEBP, SVG</p>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Actions */}
+                    <div className="flex justify-end space-x-3 pt-4 border-t border-gray-200">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (brandingData) {
+                            setBrandingSettings(brandingData);
+                          } else {
+                            refetchBranding();
+                          }
+                        }}
+                        className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors"
+                      >
+                        Reset
+                      </button>
+                      <button
+                        type="submit"
+                        disabled={brandingLoading}
+                        className="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        {brandingLoading ? 'Saving...' : 'Save Branding'}
                       </button>
                     </div>
                   </form>

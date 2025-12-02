@@ -546,6 +546,69 @@ router.put(
   }
 );
 
+// Branding Settings Routes
+
+// Get branding configuration
+router.get('/settings/branding', async (req, res, next) => {
+  try {
+    const brandingConfig = await Settings.getBrandingConfig();
+    res.json(brandingConfig);
+  } catch (error) {
+    next(error);
+  }
+});
+
+// Update branding configuration
+router.put(
+  '/settings/branding',
+  [
+    body('dashboardName').optional().isString().isLength({ min: 1, max: 100 }).withMessage('Dashboard name must be between 1 and 100 characters'),
+    body('dashboardShortName').optional().isString().isLength({ min: 1, max: 50 }).withMessage('Short name must be between 1 and 50 characters'),
+    body('sidebarLogoUrl').optional().isString(),
+    body('mainLogoUrl').optional().isString(),
+    validate
+  ],
+  async (req, res, next) => {
+    try {
+      const updates = req.body;
+      
+      // Validate logo URLs if provided (must be data URLs or valid URLs)
+      if (updates.sidebarLogoUrl !== undefined && updates.sidebarLogoUrl !== '') {
+        const isValidDataUrl = updates.sidebarLogoUrl.startsWith('data:image/');
+        const isValidUrl = /^https?:\/\/.+/.test(updates.sidebarLogoUrl);
+        if (!isValidDataUrl && !isValidUrl) {
+          return res.status(400).json({
+            error: 'Invalid sidebar logo URL',
+            message: 'Logo URL must be a valid data URL (data:image/...) or HTTP(S) URL'
+          });
+        }
+      }
+      
+      if (updates.mainLogoUrl !== undefined && updates.mainLogoUrl !== '') {
+        const isValidDataUrl = updates.mainLogoUrl.startsWith('data:image/');
+        const isValidUrl = /^https?:\/\/.+/.test(updates.mainLogoUrl);
+        if (!isValidDataUrl && !isValidUrl) {
+          return res.status(400).json({
+            error: 'Invalid main logo URL',
+            message: 'Logo URL must be a valid data URL (data:image/...) or HTTP(S) URL'
+          });
+        }
+      }
+      
+      // Update branding config
+      await Settings.setBrandingConfig(updates);
+      
+      const updatedConfig = await Settings.getBrandingConfig();
+      res.json({ 
+        message: 'Branding settings updated successfully', 
+        config: updatedConfig 
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
 // System Update Routes
 
 // Get update status

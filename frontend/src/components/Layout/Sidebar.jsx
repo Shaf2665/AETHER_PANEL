@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
+import { useTheme } from '../../contexts/ThemeContext';
 import {
   HomeIcon,
   ServerIcon,
@@ -16,6 +17,7 @@ import {
 const Sidebar = () => {
   const location = useLocation();
   const { isAdmin } = useAuth();
+  const { branding } = useTheme();
   const [adminDropdownOpen, setAdminDropdownOpen] = useState(false);
   const adminDropdownRef = useRef(null);
 
@@ -66,17 +68,31 @@ const Sidebar = () => {
     >
       <div className="p-6 border-b border-gray-700/50 flex-shrink-0">
         <div className="flex items-center space-x-3">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 via-purple-500 to-pink-500 flex items-center justify-center shadow-lg">
-            <SparklesIcon className="h-6 w-6 text-white" />
-          </div>
+          {branding?.sidebarLogoUrl ? (
+            <img
+              src={branding.sidebarLogoUrl}
+              alt="Logo"
+              className="w-10 h-10 rounded-xl object-contain shadow-lg"
+            />
+          ) : (
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 via-purple-500 to-pink-500 flex items-center justify-center shadow-lg">
+              <SparklesIcon className="h-6 w-6 text-white" />
+            </div>
+          )}
           <div>
             <h2 
               className="text-xl font-bold bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent"
               style={{ color: 'var(--theme-sidebar-text)' }}
             >
-              Aether
+              {branding?.dashboardShortName || branding?.dashboardName || 'Aether'}
             </h2>
-            <p className="text-xs" style={{ color: 'var(--theme-text-secondary)' }}>Dashboard</p>
+            <p className="text-xs" style={{ color: 'var(--theme-text-secondary)' }}>
+              {branding?.dashboardShortName 
+                ? 'Dashboard' 
+                : (branding?.dashboardName && branding.dashboardName.split(' ').length > 1
+                    ? branding.dashboardName.split(' ').slice(1).join(' ')
+                    : 'Dashboard')}
+            </p>
           </div>
         </div>
       </div>

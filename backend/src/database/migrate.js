@@ -52,6 +52,16 @@ async function migrate() {
       console.warn('⚠️  Theme settings migration file not found, skipping...');
     }
     
+    // Run branding settings migration
+    const brandingSettingsPath = path.join(__dirname, 'migrate-branding-settings.sql');
+    if (fs.existsSync(brandingSettingsPath)) {
+      const brandingSettings = fs.readFileSync(brandingSettingsPath, 'utf8');
+      await pool.query(brandingSettings);
+      console.log('✅ Branding settings migration completed');
+    } else {
+      console.warn('⚠️  Branding settings migration file not found, skipping...');
+    }
+    
     console.log('✅ Database migration completed successfully');
     process.exit(0);
   } catch (error) {

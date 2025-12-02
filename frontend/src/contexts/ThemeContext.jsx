@@ -15,6 +15,13 @@ export const ThemeProvider = ({ children }) => {
   const [theme, setTheme] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [branding, setBranding] = useState({
+    dashboardName: 'Aether Dashboard',
+    dashboardShortName: 'Aether',
+    sidebarLogoUrl: '',
+    mainLogoUrl: '',
+  });
+  const [brandingLoading, setBrandingLoading] = useState(true);
 
   /**
    * Apply CSS variables to document root
@@ -183,10 +190,63 @@ export const ThemeProvider = ({ children }) => {
     applyTheme(themeConfig);
   }, [applyTheme]);
 
-  // Load theme on mount
+  /**
+   * Get default branding configuration
+   */
+  const getDefaultBranding = useCallback(() => {
+    return {
+      dashboardName: 'Aether Dashboard',
+      dashboardShortName: 'Aether',
+      sidebarLogoUrl: '',
+      mainLogoUrl: '',
+    };
+  }, []);
+
+  /**
+   * Load branding from API
+   */
+  const loadBranding = useCallback(async () => {
+    try {
+      setBrandingLoading(true);
+      
+      // Check if user is authenticated before making API call
+      const token = localStorage.getItem('token');
+      if (!token) {
+        // No token, apply default branding silently
+        const defaultBranding = getDefaultBranding();
+        setBranding(defaultBranding);
+        setBrandingLoading(false);
+        return;
+      }
+      
+      const response = await api.get('/admin/settings/branding');
+      const brandingConfig = response.data;
+      setBranding(brandingConfig);
+    } catch (err) {
+      console.error('Failed to load branding:', err);
+      
+      // Handle 401 errors gracefully (user not authenticated)
+      if (err.response?.status === 401) {
+        // Silently apply default branding without showing error
+        const defaultBranding = getDefaultBranding();
+        setBranding(defaultBranding);
+        setBrandingLoading(false);
+        return;
+      }
+      
+      // Apply default branding on other errors
+      const defaultBranding = getDefaultBranding();
+      setBranding(defaultBranding);
+    } finally {
+      setBrandingLoading(false);
+    }
+  }, [getDefaultBranding]);
+
+  // Load theme and branding on mount
   useEffect(() => {
     loadTheme();
-  }, [loadTheme]);
+    loadBranding();
+  }, [loadTheme, loadBranding]);
 
   const value = {
     theme,
@@ -196,6 +256,9 @@ export const ThemeProvider = ({ children }) => {
     updateTheme,
     previewTheme,
     applyTheme,
+    branding,
+    brandingLoading,
+    loadBranding,
   };
 
   return (
