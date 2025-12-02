@@ -90,7 +90,7 @@ router.post('/linkvertise/generate', [
       user_id: req.user.id,
       task_type: 'linkvertise',
       task_id: link.linkId,
-      coins_reward: linkvertiseService.getCoinsReward(),
+      coins_reward: await linkvertiseService.getCoinsReward(),
       expires_at: expiresAt,
     });
 
@@ -142,7 +142,7 @@ router.post('/linkvertise/complete', [
     await RevenueTask.updateStatus(task.id, 'completed');
 
     // Set cooldown
-    const cooldownMinutes = linkvertiseService.getCooldownMinutes();
+    const cooldownMinutes = await linkvertiseService.getCooldownMinutes();
     await redis.setEx(cooldownKey, cooldownMinutes * 60, '1');
 
     res.json({ 

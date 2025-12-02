@@ -41,7 +41,15 @@ const Admin = () => {
     eggIdOther: 1,
     defaultUserId: 1,
   });
+  const [linkvertiseSettings, setLinkvertiseSettings] = useState({
+    enabled: false,
+    apiKey: '',
+    coinsPerCompletion: 50,
+    cooldownMinutes: 30,
+    manualMode: true,
+  });
   const [settingsLoading, setSettingsLoading] = useState(false);
+  const [linkvertiseLoading, setLinkvertiseLoading] = useState(false);
 
   // Fetch system statistics
   const { data: stats, isLoading: statsLoading } = useQuery('adminStats', async () => {
@@ -231,6 +239,53 @@ const Admin = () => {
     updatePterodactylMutation.mutate(pterodactylSettings, {
       onSettled: () => {
         setSettingsLoading(false);
+      },
+    });
+  };
+
+  // Fetch Linkvertise settings
+  const { data: linkvertiseData, isLoading: linkvertiseDataLoading, refetch: refetchLinkvertise } = useQuery(
+    'linkvertiseSettings',
+    async () => {
+      const res = await api.get('/admin/settings/linkvertise');
+      return res.data;
+    },
+    {
+      onSuccess: (data) => {
+        setLinkvertiseSettings({
+          enabled: data.enabled || false,
+          apiKey: data.apiKey || '',
+          coinsPerCompletion: data.coinsPerCompletion || 50,
+          cooldownMinutes: data.cooldownMinutes || 30,
+          manualMode: data.manualMode !== false,
+        });
+      },
+    }
+  );
+
+  // Update Linkvertise settings mutation
+  const updateLinkvertiseMutation = useMutation(
+    async (data) => {
+      const res = await api.put('/admin/settings/linkvertise', data);
+      return res.data;
+    },
+    {
+      onSuccess: () => {
+        toast.success('Linkvertise settings updated successfully');
+        refetchLinkvertise();
+      },
+      onError: (error) => {
+        toast.error(error.response?.data?.error || 'Failed to update Linkvertise settings');
+      },
+    }
+  );
+
+  const handleLinkvertiseSubmit = (e) => {
+    e.preventDefault();
+    setLinkvertiseLoading(true);
+    updateLinkvertiseMutation.mutate(linkvertiseSettings, {
+      onSettled: () => {
+        setLinkvertiseLoading(false);
       },
     });
   };
@@ -751,7 +806,7 @@ const Admin = () => {
           {/* Settings Tab */}
           {activeTab === 'settings' && (
             <div>
-              {pterodactylLoading ? (
+              {pterodactylLoading || linkvertiseDataLoading ? (
                 <div className="flex justify-center py-12">
                   <ArrowPathIcon className="h-8 w-8 animate-spin text-indigo-600" />
                 </div>
@@ -923,6 +978,107 @@ const Admin = () => {
                           className="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                           {settingsLoading ? 'Saving...' : 'Save Settings'}
+                        </button>
+                      </div>
+                    </form>
+                  </div>
+
+                  {/* Linkvertise Configuration */}
+                  <div>
+                    <h2 className="text-xl font-semibold mb-4 text-gray-800">Linkvertise Configuration</h2>
+                    <p className="text-sm text-gray-600 mb-6">
+                      Configure Linkvertise integration for revenue generation. Users can complete links to earn coins.
+                    </p>
+
+                    <form onSubmit={handleLinkvertiseSubmit} className="bg-white rounded-lg border border-gray-200 p-6 space-y-6">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div className="md:col-span-2">
+                          <label className="flex items-center space-x-3">
+                            <input
+                              type="checkbox"
+                              checked={linkvertiseSettings.enabled}
+                              onChange={(e) => setLinkvertiseSettings({ ...linkvertiseSettings, enabled: e.target.checked })}
+                              className="w-5 h-5 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
+                            />
+                            <span className="text-sm font-medium text-gray-700">Enable Linkvertise</span>
+                          </label>
+                          <p className="mt-1 text-sm text-gray-500 ml-8">Allow users to earn coins by completing Linkvertise links</p>
+                        </div>
+
+                        <div className="md:col-span-2">
+                          <label className="block text-sm font-medium text-gray-700 mb-2">
+                            Linkvertise API Key
+                          </label>
+                          <input
+                            type="password"
+                            value={linkvertiseSettings.apiKey}
+                            onChange={(e) => setLinkvertiseSettings({ ...linkvertiseSettings, apiKey: e.target.value })}
+                            placeholder="Enter your Linkvertise API key (optional)"
+                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                          />
+                          <p className="mt-1 text-sm text-gray-500">API key for automatic verification (leave empty for manual mode)</p>
+                        </div>
+
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">
+                            Coins per Completion
+                          </label>
+                          <input
+                            type="number"
+                            min="1"
+                            value={linkvertiseSettings.coinsPerCompletion}
+                            onChange={(e) => setLinkvertiseSettings({ ...linkvertiseSettings, coinsPerCompletion: parseInt(e.target.value) || 50 })}
+                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                            required
+                          />
+                          <p className="mt-1 text-sm text-gray-500">Number of coins awarded per completed link</p>
+                        </div>
+
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">
+                            Cooldown Minutes
+                          </label>
+                          <input
+                            type="number"
+                            min="1"
+                            value={linkvertiseSettings.cooldownMinutes}
+                            onChange={(e) => setLinkvertiseSettings({ ...linkvertiseSettings, cooldownMinutes: parseInt(e.target.value) || 30 })}
+                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                            required
+                          />
+                          <p className="mt-1 text-sm text-gray-500">Minutes users must wait between completions</p>
+                        </div>
+
+                        <div className="md:col-span-2">
+                          <label className="flex items-center space-x-3">
+                            <input
+                              type="checkbox"
+                              checked={linkvertiseSettings.manualMode}
+                              onChange={(e) => setLinkvertiseSettings({ ...linkvertiseSettings, manualMode: e.target.checked })}
+                              className="w-5 h-5 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
+                            />
+                            <span className="text-sm font-medium text-gray-700">Manual Verification Mode</span>
+                          </label>
+                          <p className="mt-1 text-sm text-gray-500 ml-8">
+                            When enabled, users manually mark links as complete. Disable for automatic API verification.
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="flex justify-end space-x-3 pt-4 border-t border-gray-200">
+                        <button
+                          type="button"
+                          onClick={() => refetchLinkvertise()}
+                          className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors"
+                        >
+                          Reset
+                        </button>
+                        <button
+                          type="submit"
+                          disabled={linkvertiseLoading}
+                          className="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          {linkvertiseLoading ? 'Saving...' : 'Save Linkvertise Settings'}
                         </button>
                       </div>
                     </form>

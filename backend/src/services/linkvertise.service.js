@@ -1,13 +1,42 @@
 const axios = require('axios');
-const config = require('../config/revenue');
+const revenueConfig = require('../config/revenue');
 
 class LinkvertiseService {
   constructor() {
-    this.apiKey = config.linkvertise.apiKey;
-    this.enabled = config.linkvertise.enabled;
+    // Initialize with env vars, will be refreshed on first use
+    this.apiKey = '';
+    this.enabled = false;
+    this.coinsPerCompletion = 50;
+    this.cooldownMinutes = 30;
+    this.manualMode = true;
+  }
+
+  /**
+   * Refresh configuration from database before making requests
+   */
+  async refreshConfig() {
+    try {
+      const config = await revenueConfig.getLinkvertiseConfig();
+      this.apiKey = config.apiKey || '';
+      this.enabled = config.enabled || false;
+      this.coinsPerCompletion = config.coinsPerCompletion || 50;
+      this.cooldownMinutes = config.cooldownMinutes || 30;
+      this.manualMode = config.manualMode !== false; // Default to true
+    } catch (error) {
+      console.warn('Failed to refresh Linkvertise config, using cached/env values:', error.message);
+      // Fallback to env vars
+      this.apiKey = process.env.LINKVERTISE_API_KEY || '';
+      this.enabled = process.env.LINKVERTISE_ENABLED === 'true';
+      this.coinsPerCompletion = parseInt(process.env.LINKVERTISE_COINS || '50', 10);
+      this.cooldownMinutes = parseInt(process.env.LINKVERTISE_COOLDOWN || '30', 10);
+      this.manualMode = process.env.LINKVERTISE_MANUAL_MODE !== 'false';
+    }
   }
 
   async generateLink(userId, targetUrl) {
+    // Refresh config before operation
+    await this.refreshConfig();
+    
     if (!this.enabled) {
       throw new Error('Linkvertise is not enabled');
     }
@@ -27,12 +56,15 @@ class LinkvertiseService {
   }
 
   async verifyCompletion(linkId) {
+    // Refresh config before operation
+    await this.refreshConfig();
+    
     if (!this.enabled) {
       return false;
     }
 
     // Check if manual verification mode is enabled
-    const manualMode = process.env.LINKVERTISE_MANUAL_MODE === 'true';
+    const manualMode = this.manualMode;
     
     if (manualMode) {
       // Manual verification mode: verify that the link exists and is valid
@@ -83,12 +115,14 @@ class LinkvertiseService {
     return false;
   }
 
-  getCoinsReward() {
-    return config.linkvertise.coinsPerCompletion;
+  async getCoinsReward() {
+    await this.refreshConfig();
+    return this.coinsPerCompletion;
   }
 
-  getCooldownMinutes() {
-    return config.linkvertise.cooldownMinutes;
+  async getCooldownMinutes() {
+    await this.refreshConfig();
+    return this.cooldownMinutes;
   }
 }
 

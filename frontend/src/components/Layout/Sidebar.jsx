@@ -32,8 +32,8 @@ const Sidebar = () => {
   }
 
   return (
-    <div className="w-64 bg-gradient-to-b from-gray-900 via-gray-800 to-gray-900 min-h-screen shadow-2xl border-r border-gray-700/50">
-      <div className="p-6 border-b border-gray-700/50">
+    <div className="w-64 bg-gradient-to-b from-gray-900 via-gray-800 to-gray-900 h-screen shadow-2xl overflow-hidden relative flex flex-col">
+      <div className="p-6 border-b border-gray-700/50 flex-shrink-0">
         <div className="flex items-center space-x-3">
           <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 via-purple-500 to-pink-500 flex items-center justify-center shadow-lg">
             <SparklesIcon className="h-6 w-6 text-white" />
@@ -46,7 +46,7 @@ const Sidebar = () => {
           </div>
         </div>
       </div>
-      <nav className="p-3 mt-4">
+      <nav className="p-3 mt-4 overflow-y-auto flex-1">
         {navigation.map((item) => {
           const isActive = location.pathname === item.href;
           return (
@@ -73,7 +73,7 @@ const Sidebar = () => {
       </nav>
       
       {/* Decorative gradient at bottom */}
-      <div className="absolute bottom-0 left-0 right-0 h-32 bg-gradient-to-t from-purple-900/20 to-transparent pointer-events-none"></div>
+      <div className="absolute bottom-0 left-0 right-0 h-32 bg-gradient-to-t from-purple-900/20 to-transparent pointer-events-none z-10"></div>
     </div>
   );
 };

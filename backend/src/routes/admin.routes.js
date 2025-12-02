@@ -433,5 +433,46 @@ router.put('/settings/pterodactyl', [
   }
 });
 
+// Get Linkvertise settings
+router.get('/settings/linkvertise', async (req, res, next) => {
+  try {
+    const revenueConfig = require('../config/revenue');
+    revenueConfig.clearLinkvertiseCache(); // Clear cache to get latest
+    const config = await Settings.getLinkvertiseConfig();
+    res.json(config);
+  } catch (error) {
+    next(error);
+  }
+});
+
+// Update Linkvertise settings
+router.put('/settings/linkvertise', [
+  body('enabled').optional().isBoolean(),
+  body('apiKey').optional().isString(),
+  body('coinsPerCompletion').optional().isInt({ min: 1 }).withMessage('Coins per completion must be at least 1'),
+  body('cooldownMinutes').optional().isInt({ min: 1 }).withMessage('Cooldown minutes must be at least 1'),
+  body('manualMode').optional().isBoolean(),
+  validate
+], async (req, res, next) => {
+  try {
+    const updates = req.body;
+    
+    if (updates.enabled !== undefined) await Settings.set('linkvertise_enabled', updates.enabled.toString());
+    if (updates.apiKey !== undefined) await Settings.set('linkvertise_api_key', updates.apiKey || '');
+    if (updates.coinsPerCompletion !== undefined) await Settings.set('linkvertise_coins_per_completion', updates.coinsPerCompletion.toString());
+    if (updates.cooldownMinutes !== undefined) await Settings.set('linkvertise_cooldown_minutes', updates.cooldownMinutes.toString());
+    if (updates.manualMode !== undefined) await Settings.set('linkvertise_manual_mode', updates.manualMode.toString());
+
+    // Clear cache to force refresh
+    const revenueConfig = require('../config/revenue');
+    revenueConfig.clearLinkvertiseCache();
+
+    const updatedConfig = await Settings.getLinkvertiseConfig();
+    res.json({ message: 'Linkvertise settings updated successfully', config: updatedConfig });
+  } catch (error) {
+    next(error);
+  }
+});
+
 module.exports = router;
 

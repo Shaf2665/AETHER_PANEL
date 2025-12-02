@@ -90,6 +90,32 @@ class Settings {
       };
     }
   }
+
+  /**
+   * Get Linkvertise configuration from settings
+   * @returns {Promise<Object>} Linkvertise configuration object
+   */
+  static async getLinkvertiseConfig() {
+    try {
+      const settings = await this.getAll();
+      return {
+        enabled: settings.linkvertise_enabled === 'true',
+        apiKey: settings.linkvertise_api_key || '',
+        coinsPerCompletion: parseInt(settings.linkvertise_coins_per_completion || '50', 10),
+        cooldownMinutes: parseInt(settings.linkvertise_cooldown_minutes || '30', 10),
+        manualMode: settings.linkvertise_manual_mode !== 'false', // Default to true
+      };
+    } catch (error) {
+      console.error('Error getting Linkvertise config:', error);
+      return {
+        enabled: false,
+        apiKey: '',
+        coinsPerCompletion: 50,
+        cooldownMinutes: 30,
+        manualMode: true,
+      };
+    }
+  }
 }
 
 module.exports = Settings;

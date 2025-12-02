@@ -22,6 +22,16 @@ async function migrate() {
       console.warn('⚠️  Settings migration file not found, skipping...');
     }
     
+    // Run Linkvertise settings migration
+    const linkvertisePath = path.join(__dirname, 'migrate-linkvertise-settings.sql');
+    if (fs.existsSync(linkvertisePath)) {
+      const linkvertise = fs.readFileSync(linkvertisePath, 'utf8');
+      await pool.query(linkvertise);
+      console.log('✅ Linkvertise settings migration completed');
+    } else {
+      console.warn('⚠️  Linkvertise settings migration file not found, skipping...');
+    }
+    
     console.log('✅ Database migration completed successfully');
     process.exit(0);
   } catch (error) {
