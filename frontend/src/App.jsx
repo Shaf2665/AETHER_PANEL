@@ -95,6 +95,14 @@ function App() {
                           <Route path="/earn" element={<EarnCoins />} />
                           <Route path="/store" element={<Store />} />
                           <Route
+                            path="/admin/settings"
+                            element={
+                              <AdminRoute>
+                                <Admin />
+                              </AdminRoute>
+                            }
+                          />
+                          <Route
                             path="/admin"
                             element={
                               <AdminRoute>

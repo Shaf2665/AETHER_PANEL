@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import {
@@ -8,11 +8,16 @@ import {
   ShoppingBagIcon,
   SparklesIcon,
   ShieldCheckIcon,
+  ChevronDownIcon,
+  Cog6ToothIcon,
+  ChartBarIcon,
 } from '@heroicons/react/24/outline';
 
 const Sidebar = () => {
   const location = useLocation();
   const { isAdmin } = useAuth();
+  const [adminDropdownOpen, setAdminDropdownOpen] = useState(false);
+  const adminDropdownRef = useRef(null);
 
   const navigation = [
     { name: 'Dashboard', href: '/', icon: HomeIcon, gradient: 'from-blue-500 to-cyan-500' },
@@ -21,24 +26,38 @@ const Sidebar = () => {
     { name: 'Store', href: '/store', icon: ShoppingBagIcon, gradient: 'from-amber-500 to-orange-500' },
   ];
 
-  // Add admin panel link if user is admin
-  if (isAdmin) {
-    navigation.push({
-      name: 'Admin Panel',
-      href: '/admin',
-      icon: ShieldCheckIcon,
-      gradient: 'from-red-500 to-rose-500',
-    });
-  }
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (adminDropdownRef.current && !adminDropdownRef.current.contains(event.target)) {
+        setAdminDropdownOpen(false);
+      }
+    };
+
+    if (adminDropdownOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [adminDropdownOpen]);
+
+  // Close dropdown when route changes
+  useEffect(() => {
+    setAdminDropdownOpen(false);
+  }, [location.pathname]);
 
   const getNavGradient = (href) => {
     if (href === '/') return 'var(--theme-nav-dashboard)';
     if (href === '/servers') return 'var(--theme-nav-servers)';
     if (href === '/earn') return 'var(--theme-nav-earnCoins)';
     if (href === '/store') return 'var(--theme-nav-store)';
-    if (href === '/admin') return 'var(--theme-nav-admin)';
+    if (href === '/admin' || href === '/admin/settings') return 'var(--theme-nav-admin)';
     return 'var(--theme-nav-active)';
   };
+
+  const isAdminActive = location.pathname === '/admin' || location.pathname === '/admin/settings';
 
   return (
     <div 
@@ -99,6 +118,89 @@ const Sidebar = () => {
             </Link>
           );
         })}
+        
+        {/* Admin Panel with Dropdown */}
+        {isAdmin && (
+          <div className="relative mb-2" ref={adminDropdownRef}>
+            <button
+              onClick={() => setAdminDropdownOpen(!adminDropdownOpen)}
+              aria-expanded={adminDropdownOpen}
+              aria-haspopup="true"
+              aria-label="Admin Panel menu"
+              className={`group relative flex items-center justify-between w-full px-4 py-3 text-sm font-medium rounded-xl transition-all duration-200 ${
+                isAdminActive
+                  ? 'text-white shadow-lg transform scale-105'
+                  : 'hover:text-white'
+              }`}
+              style={{
+                background: isAdminActive ? getNavGradient('/admin') : 'transparent',
+                color: isAdminActive ? 'white' : 'var(--theme-sidebar-text)',
+              }}
+              onMouseEnter={(e) => {
+                if (!isAdminActive) {
+                  e.currentTarget.style.background = 'var(--theme-sidebar-hover)';
+                }
+              }}
+              onMouseLeave={(e) => {
+                if (!isAdminActive && !adminDropdownOpen) {
+                  e.currentTarget.style.background = 'transparent';
+                }
+              }}
+            >
+              <div className="flex items-center">
+                {isAdminActive && (
+                  <div className={`absolute left-0 top-0 bottom-0 w-1 bg-white rounded-r-full`}></div>
+                )}
+                <ShieldCheckIcon className={`mr-3 h-5 w-5 ${isAdminActive ? 'text-white' : ''} transition-colors`} style={{ color: isAdminActive ? 'white' : 'var(--theme-sidebar-text)' }} />
+                <span className="relative z-10">Admin Panel</span>
+                {isAdminActive && (
+                  <div className="absolute inset-0 bg-white/10 rounded-xl blur-sm"></div>
+                )}
+              </div>
+              <ChevronDownIcon 
+                className={`h-4 w-4 transition-transform ${adminDropdownOpen ? 'rotate-180' : ''}`}
+                style={{ color: isAdminActive ? 'white' : 'var(--theme-sidebar-text)' }}
+              />
+            </button>
+            
+            {adminDropdownOpen && (
+              <div className="mt-1 ml-4 space-y-1" role="menu" aria-label="Admin Panel submenu">
+                <Link
+                  to="/admin"
+                  className={`flex items-center px-4 py-2 text-sm font-medium rounded-lg transition-all duration-200 ${
+                    location.pathname === '/admin'
+                      ? 'text-white shadow-md'
+                      : 'hover:text-white'
+                  }`}
+                  style={{
+                    background: location.pathname === '/admin' ? 'var(--theme-nav-admin)' : 'var(--theme-sidebar-hover)',
+                    color: location.pathname === '/admin' ? 'white' : 'var(--theme-sidebar-text)',
+                  }}
+                  onClick={() => setAdminDropdownOpen(false)}
+                >
+                  <ChartBarIcon className="mr-3 h-4 w-4" />
+                  <span>Dashboard</span>
+                </Link>
+                <Link
+                  to="/admin/settings"
+                  className={`flex items-center px-4 py-2 text-sm font-medium rounded-lg transition-all duration-200 ${
+                    location.pathname === '/admin/settings'
+                      ? 'text-white shadow-md'
+                      : 'hover:text-white'
+                  }`}
+                  style={{
+                    background: location.pathname === '/admin/settings' ? 'var(--theme-nav-admin)' : 'var(--theme-sidebar-hover)',
+                    color: location.pathname === '/admin/settings' ? 'white' : 'var(--theme-sidebar-text)',
+                  }}
+                  onClick={() => setAdminDropdownOpen(false)}
+                >
+                  <Cog6ToothIcon className="mr-3 h-4 w-4" />
+                  <span>Settings</span>
+                </Link>
+              </div>
+            )}
+          </div>
+        )}
       </nav>
       
       {/* Decorative gradient at bottom */}
