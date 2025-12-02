@@ -27,6 +27,13 @@ api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401) {
+      // Don't redirect if already on login/register/auth callback pages
+      const currentPath = window.location.pathname;
+      if (currentPath === '/login' || currentPath === '/register' || currentPath === '/auth/callback') {
+        // Just reject the promise, don't show toast or redirect
+        return Promise.reject(error);
+      }
+      
       // Show notification before redirecting
       toast.error('Your session has expired. Please log in again.', {
         duration: 3000,

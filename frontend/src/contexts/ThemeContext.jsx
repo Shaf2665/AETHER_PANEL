@@ -78,55 +78,85 @@ export const ThemeProvider = ({ children }) => {
   }, []);
 
   /**
+   * Get default theme configuration
+   */
+  const getDefaultTheme = useCallback(() => {
+    return {
+      colors: {
+        primary: '#3b82f6',
+        secondary: '#8b5cf6',
+        sidebarBg: 'linear-gradient(to bottom, #1f2937, #111827)',
+        sidebarText: '#ffffff',
+        sidebarHover: 'rgba(255, 255, 255, 0.1)',
+        navActive: 'linear-gradient(to right, #3b82f6, #06b6d4)',
+        background: 'linear-gradient(to bottom right, #f3f4f6, #e5e7eb)',
+        cardBg: 'rgba(255, 255, 255, 0.8)',
+        textPrimary: '#111827',
+        textSecondary: '#6b7280',
+      },
+      navigation: {
+        dashboard: 'linear-gradient(to right, #3b82f6, #06b6d4)',
+        servers: 'linear-gradient(to right, #a855f7, #ec4899)',
+        earnCoins: 'linear-gradient(to right, #10b981, #14b8a6)',
+        store: 'linear-gradient(to right, #f59e0b, #f97316)',
+        admin: 'linear-gradient(to right, #ef4444, #f43f5e)',
+      },
+      background: {
+        image: '',
+        overlay: 'rgba(0, 0, 0, 0)',
+        position: 'center',
+        size: 'cover',
+        repeat: 'no-repeat',
+      },
+      customCSS: '',
+    };
+  }, []);
+
+  /**
    * Load theme from API
    */
   const loadTheme = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
+      
+      // Check if user is authenticated before making API call
+      const token = localStorage.getItem('token');
+      if (!token) {
+        // No token, apply default theme silently
+        const defaultTheme = getDefaultTheme();
+        setTheme(defaultTheme);
+        applyTheme(defaultTheme);
+        setLoading(false);
+        return;
+      }
+      
       const response = await api.get('/admin/settings/theme');
       const themeConfig = response.data;
       setTheme(themeConfig);
       applyTheme(themeConfig);
     } catch (err) {
       console.error('Failed to load theme:', err);
+      
+      // Handle 401 errors gracefully (user not authenticated)
+      if (err.response?.status === 401) {
+        // Silently apply default theme without showing error
+        const defaultTheme = getDefaultTheme();
+        setTheme(defaultTheme);
+        applyTheme(defaultTheme);
+        setLoading(false);
+        return;
+      }
+      
       setError(err.message);
-      // Apply default theme on error
-      const defaultTheme = {
-        colors: {
-          primary: '#3b82f6',
-          secondary: '#8b5cf6',
-          sidebarBg: 'linear-gradient(to bottom, #1f2937, #111827)',
-          sidebarText: '#ffffff',
-          sidebarHover: 'rgba(255, 255, 255, 0.1)',
-          navActive: 'linear-gradient(to right, #3b82f6, #06b6d4)',
-          background: 'linear-gradient(to bottom right, #f3f4f6, #e5e7eb)',
-          cardBg: 'rgba(255, 255, 255, 0.8)',
-          textPrimary: '#111827',
-          textSecondary: '#6b7280',
-        },
-        navigation: {
-          dashboard: 'linear-gradient(to right, #3b82f6, #06b6d4)',
-          servers: 'linear-gradient(to right, #a855f7, #ec4899)',
-          earnCoins: 'linear-gradient(to right, #10b981, #14b8a6)',
-          store: 'linear-gradient(to right, #f59e0b, #f97316)',
-          admin: 'linear-gradient(to right, #ef4444, #f43f5e)',
-        },
-        background: {
-          image: '',
-          overlay: 'rgba(0, 0, 0, 0)',
-          position: 'center',
-          size: 'cover',
-          repeat: 'no-repeat',
-        },
-        customCSS: '',
-      };
+      // Apply default theme on other errors
+      const defaultTheme = getDefaultTheme();
       setTheme(defaultTheme);
       applyTheme(defaultTheme);
     } finally {
       setLoading(false);
     }
-  }, [applyTheme]);
+  }, [applyTheme, getDefaultTheme]);
 
   /**
    * Update theme
