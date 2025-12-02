@@ -32,6 +32,16 @@ async function migrate() {
       console.warn('⚠️  Linkvertise settings migration file not found, skipping...');
     }
     
+    // Run update audit migration
+    const updateAuditPath = path.join(__dirname, 'migrate-update-audit.sql');
+    if (fs.existsSync(updateAuditPath)) {
+      const updateAudit = fs.readFileSync(updateAuditPath, 'utf8');
+      await pool.query(updateAudit);
+      console.log('✅ Update audit table migration completed');
+    } else {
+      console.warn('⚠️  Update audit migration file not found, skipping...');
+    }
+    
     console.log('✅ Database migration completed successfully');
     process.exit(0);
   } catch (error) {

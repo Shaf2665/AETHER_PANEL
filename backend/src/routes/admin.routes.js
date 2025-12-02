@@ -9,6 +9,8 @@ const Settings = require('../models/Settings');
 const coinService = require('../services/coin.service');
 const pterodactylConfig = require('../config/pterodactyl');
 const pool = require('../config/database');
+const updateService = require('../services/update.service');
+const { updateRateLimit } = require('../middleware/updateRateLimit.middleware');
 
 const router = express.Router();
 
@@ -469,6 +471,66 @@ router.put('/settings/linkvertise', [
 
     const updatedConfig = await Settings.getLinkvertiseConfig();
     res.json({ message: 'Linkvertise settings updated successfully', config: updatedConfig });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// System Update Routes
+
+// Get update status
+router.get('/system/update/status', async (req, res, next) => {
+  try {
+    const status = updateService.getStatus();
+    res.json(status);
+  } catch (error) {
+    next(error);
+  }
+});
+
+// Get update logs
+router.get('/system/update/logs', async (req, res, next) => {
+  try {
+    const logs = updateService.getLogs();
+    res.json({ logs });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// Perform system update
+router.post('/system/update', updateRateLimit, async (req, res, next) => {
+  try {
+    // Check feature flag
+    if (process.env.ENABLE_SYSTEM_UPDATE !== 'true') {
+      return res.status(403).json({
+        error: 'System updates are disabled',
+        message: 'Set ENABLE_SYSTEM_UPDATE=true in your .env file to enable system updates.'
+      });
+    }
+
+    // Check if update already in progress
+    const status = updateService.getStatus();
+    if (status.isUpdating) {
+      return res.status(409).json({
+        error: 'Update already in progress',
+        message: 'Please wait for the current update to complete.'
+      });
+    }
+
+    // Perform update asynchronously
+    const userId = req.user.id;
+    
+    // Start update in background (don't await)
+    updateService.performUpdate(userId).catch(error => {
+      console.error('Update failed:', error);
+    });
+
+    // Return immediate response
+    res.json({
+      message: 'Update started',
+      status: 'in_progress'
+    });
   } catch (error) {
     next(error);
   }

@@ -14,7 +14,10 @@ import {
   TrashIcon,
   XMarkIcon,
   ArrowPathIcon,
-  Cog6ToothIcon
+  Cog6ToothIcon,
+  ExclamationTriangleIcon,
+  CheckCircleIcon,
+  InformationCircleIcon
 } from '@heroicons/react/24/outline';
 
 const Admin = () => {
@@ -50,6 +53,7 @@ const Admin = () => {
   });
   const [settingsLoading, setSettingsLoading] = useState(false);
   const [linkvertiseLoading, setLinkvertiseLoading] = useState(false);
+  const [updateModalOpen, setUpdateModalOpen] = useState(false);
 
   // Fetch system statistics
   const { data: stats, isLoading: statsLoading } = useQuery('adminStats', async () => {
@@ -288,6 +292,45 @@ const Admin = () => {
         setLinkvertiseLoading(false);
       },
     });
+  };
+
+  // Fetch update status
+  const { data: updateStatus, isLoading: updateStatusLoading, refetch: refetchUpdateStatus } = useQuery(
+    'updateStatus',
+    async () => {
+      const res = await api.get('/admin/system/update/status');
+      return res.data;
+    },
+    {
+      refetchInterval: (data) => {
+        // Poll every 2 seconds when updating
+        return data?.isUpdating ? 2000 : false;
+      },
+    }
+  );
+
+  // Perform update mutation
+  const performUpdateMutation = useMutation(
+    async () => {
+      const res = await api.post('/admin/system/update');
+      return res.data;
+    },
+    {
+      onSuccess: () => {
+        toast.success('Update started');
+        setUpdateModalOpen(true);
+        refetchUpdateStatus();
+      },
+      onError: (error) => {
+        toast.error(error.response?.data?.error || 'Failed to start update');
+      },
+    }
+  );
+
+  const handleUpdateClick = () => {
+    if (window.confirm('Are you sure you want to update the system? This will pull the latest code from GitHub and rebuild containers.')) {
+      performUpdateMutation.mutate();
+    }
   };
 
   const tabs = [
@@ -1083,6 +1126,60 @@ const Admin = () => {
                       </div>
                     </form>
                   </div>
+
+                  {/* System Update */}
+                  <div>
+                    <h2 className="text-xl font-semibold mb-4 text-gray-800">System Update</h2>
+                    <p className="text-sm text-gray-600 mb-6">
+                      Update the dashboard to the latest version from GitHub. This will pull the latest code, rebuild containers, and run migrations.
+                    </p>
+
+                    <div className="bg-white rounded-lg border border-gray-200 p-6 space-y-4">
+                      {!updateStatus?.canUpdate ? (
+                        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                          <div className="flex items-start">
+                            <ExclamationTriangleIcon className="h-5 w-5 text-yellow-600 mt-0.5 mr-3" />
+                            <div>
+                              <h3 className="text-sm font-medium text-yellow-800">System updates are disabled</h3>
+                              <p className="text-sm text-yellow-700 mt-1">
+                                To enable system updates, set <code className="bg-yellow-100 px-1 rounded">ENABLE_SYSTEM_UPDATE=true</code> in your <code className="bg-yellow-100 px-1 rounded">.env</code> file and restart the container.
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      ) : (
+                        <>
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <h3 className="text-lg font-medium text-gray-900">Update Dashboard</h3>
+                              <p className="text-sm text-gray-500 mt-1">
+                                {updateStatus?.isUpdating ? 'Update in progress...' : 'Ready to update'}
+                              </p>
+                            </div>
+                            <button
+                              onClick={handleUpdateClick}
+                              disabled={updateStatus?.isUpdating || performUpdateMutation.isLoading}
+                              className="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2"
+                            >
+                              <ArrowPathIcon className={`h-5 w-5 ${updateStatus?.isUpdating ? 'animate-spin' : ''}`} />
+                              <span>{updateStatus?.isUpdating ? 'Updating...' : 'Update Now'}</span>
+                            </button>
+                          </div>
+
+                          {updateStatus?.isUpdating && (
+                            <div className="mt-4">
+                              <button
+                                onClick={() => setUpdateModalOpen(true)}
+                                className="text-sm text-indigo-600 hover:text-indigo-700"
+                              >
+                                View update progress →
+                              </button>
+                            </div>
+                          )}
+                        </>
+                      )}
+                    </div>
+                  </div>
                 </div>
               )}
             </div>
@@ -1158,6 +1255,110 @@ const Admin = () => {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Update Progress Modal */}
+      {updateModalOpen && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-2xl w-full max-h-[80vh] flex flex-col">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-xl font-semibold">System Update Progress</h2>
+              <button
+                onClick={() => {
+                  if (!updateStatus?.isUpdating) {
+                    setUpdateModalOpen(false);
+                  }
+                }}
+                disabled={updateStatus?.isUpdating}
+                className="text-gray-400 hover:text-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <XMarkIcon className="h-6 w-6" />
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto mb-4">
+              {updateStatusLoading ? (
+                <div className="flex justify-center py-8">
+                  <ArrowPathIcon className="h-8 w-8 animate-spin text-indigo-600" />
+                </div>
+              ) : updateStatus?.logs && updateStatus.logs.length > 0 ? (
+                <div className="space-y-2 font-mono text-sm">
+                  {updateStatus.logs.map((log, idx) => {
+                    const getIcon = () => {
+                      switch (log.type) {
+                        case 'success':
+                          return <CheckCircleIcon className="h-4 w-4 text-green-500" />;
+                        case 'error':
+                          return <ExclamationTriangleIcon className="h-4 w-4 text-red-500" />;
+                        case 'warning':
+                          return <ExclamationTriangleIcon className="h-4 w-4 text-yellow-500" />;
+                        default:
+                          return <InformationCircleIcon className="h-4 w-4 text-blue-500" />;
+                      }
+                    };
+
+                    const getColor = () => {
+                      switch (log.type) {
+                        case 'success':
+                          return 'text-green-700 bg-green-50';
+                        case 'error':
+                          return 'text-red-700 bg-red-50';
+                        case 'warning':
+                          return 'text-yellow-700 bg-yellow-50';
+                        default:
+                          return 'text-gray-700 bg-gray-50';
+                      }
+                    };
+
+                    return (
+                      <div
+                        key={idx}
+                        className={`p-3 rounded-lg ${getColor()} flex items-start space-x-2`}
+                      >
+                        {getIcon()}
+                        <div className="flex-1">
+                          <div className="flex items-center justify-between">
+                            <span>{log.message}</span>
+                            {log.timestamp && (
+                              <span className="text-xs opacity-70 ml-2">
+                                {new Date(log.timestamp).toLocaleTimeString()}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="text-center py-8 text-gray-500">
+                  No update logs available
+                </div>
+              )}
+            </div>
+
+            <div className="border-t border-gray-200 pt-4 flex justify-between items-center">
+              <div className="text-sm text-gray-600">
+                {updateStatus?.isUpdating ? (
+                  <span className="flex items-center space-x-2">
+                    <ArrowPathIcon className="h-4 w-4 animate-spin text-indigo-600" />
+                    <span>Update in progress...</span>
+                  </span>
+                ) : (
+                  <span>Update completed</span>
+                )}
+              </div>
+              <button
+                onClick={() => {
+                  refetchUpdateStatus();
+                }}
+                className="px-4 py-2 text-sm border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors"
+              >
+                Refresh
+              </button>
+            </div>
           </div>
         </div>
       )}

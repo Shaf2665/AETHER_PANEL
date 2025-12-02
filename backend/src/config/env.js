@@ -44,6 +44,13 @@ function validateEnv() {
     }
   }
 
+  // System update feature (optional - warn only)
+  if (process.env.ENABLE_SYSTEM_UPDATE === 'true') {
+    console.warn('⚠️  WARNING: System updates are enabled.');
+    console.warn('   This feature allows admins to update the dashboard from the UI.');
+    console.warn('   Ensure proper security measures are in place.');
+  }
+
   if (errors.length > 0) {
     console.error('❌ Environment variable validation failed:');
     errors.forEach((error) => {

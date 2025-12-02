@@ -357,6 +357,107 @@ docker run -d \
 
 For detailed Docker setup instructions, troubleshooting, and advanced configuration, see [DOCKER.md](DOCKER.md).
 
+## In-App System Updates
+
+Aether Dashboard includes a built-in system update feature that allows administrators to update the dashboard directly from the Admin Panel UI without manual VPS commands.
+
+### Security Warning
+
+⚠️ **IMPORTANT**: The system update feature is **disabled by default** for security reasons. Enabling this feature allows admins to execute git and docker commands on your server. Only enable this feature if:
+
+- You trust all administrators with full system access
+- Your server is properly secured
+- You understand the security implications
+- You have proper backups in place
+
+### Enabling System Updates
+
+To enable the in-app update feature:
+
+1. **Add to your `.env` file:**
+   ```bash
+   ENABLE_SYSTEM_UPDATE=true
+   ```
+
+2. **Restart the container:**
+   ```bash
+   docker-compose restart aether-dashboard
+   ```
+
+### How It Works
+
+The update feature uses a separate `update-runner` container that:
+- Has access to your project directory (via volume mount)
+- Can execute git commands to pull latest code
+- Can rebuild Docker containers
+- Runs database migrations automatically
+- Is isolated from the main application container for security
+
+### Using the Update Feature
+
+1. **Navigate to Admin Panel** → **Settings** tab
+2. **Scroll to "System Update"** section
+3. **Click "Update Now"** button
+4. **Monitor progress** in the update modal
+5. **Wait for completion** - the system will automatically:
+   - Pull latest code from GitHub
+   - Rebuild containers
+   - Run database migrations
+   - Verify system health
+
+### Safety Features
+
+The update system includes multiple safety safeguards:
+
+- ✅ **Pre-flight checks**: Validates all prerequisites before starting
+- ✅ **Non-destructive git pull**: Stashes local changes before pulling
+- ✅ **Build before switch**: Builds new container while old one runs
+- ✅ **Health verification**: Verifies each step before proceeding
+- ✅ **Automatic rollback**: Restores previous commit on failure
+- ✅ **Timeouts**: All operations have timeouts to prevent hanging
+- ✅ **Retry logic**: Git pull retries 3 times with exponential backoff
+- ✅ **Concurrent prevention**: Only one update can run at a time
+- ✅ **Rate limiting**: Maximum 1 update per hour per admin
+- ✅ **Comprehensive logging**: All operations logged with timestamps
+
+### Manual Update (Fallback)
+
+If the in-app update feature fails or is disabled, you can update manually:
+
+```bash
+# Navigate to project directory
+cd /path/to/aether-dashboard
+
+# Pull latest code
+git pull origin main
+
+# Rebuild containers
+docker-compose up -d --build
+
+# Run migrations (if needed)
+docker-compose exec aether-dashboard npm run migrate
+```
+
+### Troubleshooting
+
+**Update fails with "Update runner container is not available":**
+- Ensure Docker Compose is accessible from the container
+- Check that the `update-runner` service can be started: `docker-compose --profile update up -d update-runner`
+
+**Update fails with "Git is not available":**
+- The update-runner container should have git installed automatically
+- Try restarting the update-runner container
+
+**Update fails during container rebuild:**
+- Old container should still be running (safe!)
+- Check Docker logs: `docker-compose logs aether-dashboard`
+- Manually rebuild if needed: `docker-compose up -d --build`
+
+**Update fails during migrations:**
+- System may be in inconsistent state
+- Check migration logs in the update modal
+- Run migrations manually: `docker-compose exec aether-dashboard npm run migrate`
+
 ## Configuration
 
 All configuration is done through environment variables in the `.env` file. See [DOCKER.md](DOCKER.md) for a complete list of configuration options.
@@ -486,6 +587,9 @@ See [DOCKER.md](DOCKER.md) for detailed configuration options.
 - `GET /api/admin/servers` - Get all servers with pagination and filters
 - `GET /api/admin/transactions` - Get all transactions with pagination and filters
 - `GET /api/admin/revenue` - Get revenue analytics (by source, daily, top earners)
+- `GET /api/admin/system/update/status` - Get system update status and logs
+- `GET /api/admin/system/update/logs` - Get update logs
+- `POST /api/admin/system/update` - Start system update (requires `ENABLE_SYSTEM_UPDATE=true`)
 
 ## Database Schema
 

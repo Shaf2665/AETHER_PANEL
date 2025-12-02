@@ -56,6 +56,7 @@ services:
       - REFERRAL_COMMISSION=${REFERRAL_COMMISSION:-10}
       - DAILY_LOGIN_ENABLED=${DAILY_LOGIN_ENABLED:-true}
       - DAILY_LOGIN_COINS=${DAILY_LOGIN_COINS:-25}
+      - ENABLE_SYSTEM_UPDATE=${ENABLE_SYSTEM_UPDATE:-false}
     depends_on:
       postgres:
         condition: service_healthy
@@ -120,6 +121,20 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+
+  update-runner:
+    image: docker:24-cli-alpine
+    container_name: aether-update-runner
+    restart: "no"
+    volumes:
+      - .:/project:rw
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    working_dir: /project
+    networks:
+      - aether-network
+    profiles:
+      - update
+    command: sh -c "tail -f /dev/null"
 
 volumes:
   postgres_data:

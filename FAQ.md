@@ -503,6 +503,33 @@ rm .env
 
 ### How do I update the dashboard to a newer version?
 
+You can update the dashboard in two ways:
+
+**Option 1: In-App Update (Recommended, if enabled)**
+
+The dashboard includes a built-in update feature that allows admins to update directly from the Admin Panel:
+
+1. **Enable the feature** (one-time setup):
+   - Add `ENABLE_SYSTEM_UPDATE=true` to your `.env` file
+   - Restart the container: `docker-compose restart aether-dashboard`
+
+2. **Update from Admin Panel**:
+   - Navigate to **Admin Panel** → **Settings** tab
+   - Scroll to **"System Update"** section
+   - Click **"Update Now"** button
+   - Monitor progress in the update modal
+   - The system will automatically:
+     - Pull latest code from GitHub
+     - Rebuild containers
+     - Run database migrations
+     - Verify system health
+
+**Security Note**: The in-app update feature is disabled by default for security reasons. Only enable it if you trust all administrators with system access. See the [README.md](README.md#in-app-system-updates) for more details.
+
+**Option 2: Manual Update (Fallback)**
+
+If the in-app update feature is disabled or fails, you can update manually:
+
 **Update Steps:**
 
 ```bash
