@@ -77,6 +77,17 @@ const limiter = rateLimit({
   message: 'Too many requests, please try again later.',
   standardHeaders: true,
   legacyHeaders: false,
+  // Explicitly acknowledge trust proxy setting to prevent ValidationError
+  trustProxy: isProduction,
+  // Custom key generator for better IP detection behind proxy
+  keyGenerator: (req) => {
+    // In production with trust proxy, use X-Forwarded-For header
+    if (isProduction && req.headers['x-forwarded-for']) {
+      const forwarded = req.headers['x-forwarded-for'].split(',')[0].trim();
+      return forwarded || req.ip;
+    }
+    return req.ip;
+  },
 });
 app.use('/api/', limiter);
 
@@ -87,6 +98,15 @@ const authLimiter = rateLimit({
   message: 'Too many authentication attempts, please try again later.',
   standardHeaders: true,
   legacyHeaders: false,
+  // Explicitly acknowledge trust proxy setting
+  trustProxy: isProduction,
+  keyGenerator: (req) => {
+    if (isProduction && req.headers['x-forwarded-for']) {
+      const forwarded = req.headers['x-forwarded-for'].split(',')[0].trim();
+      return forwarded || req.ip;
+    }
+    return req.ip;
+  },
 });
 
 // Stricter rate limiting for revenue endpoints (prevent coin farming)
@@ -96,6 +116,15 @@ const revenueLimiter = rateLimit({
   message: 'Too many requests to revenue endpoints, please slow down.',
   standardHeaders: true,
   legacyHeaders: false,
+  // Explicitly acknowledge trust proxy setting
+  trustProxy: isProduction,
+  keyGenerator: (req) => {
+    if (isProduction && req.headers['x-forwarded-for']) {
+      const forwarded = req.headers['x-forwarded-for'].split(',')[0].trim();
+      return forwarded || req.ip;
+    }
+    return req.ip;
+  },
 });
 
 // Body parsing middleware with size limits
