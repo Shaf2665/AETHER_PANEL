@@ -91,6 +91,7 @@ const Admin = () => {
     customCSS: '',
   });
   const [themeLoading, setThemeLoading] = useState(false);
+  const fileInputRef = React.useRef(null);
 
   // Fetch system statistics
   const { data: stats, isLoading: statsLoading } = useQuery('adminStats', async () => {
@@ -358,6 +359,115 @@ const Admin = () => {
     } else {
       refetchTheme();
     }
+  };
+
+  // Helper functions for gradient and color parsing
+  const parseGradientColors = (gradientString) => {
+    if (!gradientString || typeof gradientString !== 'string') {
+      return { color1: '#3b82f6', color2: '#06b6d4', direction: 'to right' };
+    }
+    
+    // Match linear-gradient pattern: linear-gradient(to direction, #color1, #color2)
+    const gradientMatch = gradientString.match(/linear-gradient\(to\s+(\w+),\s*(#[0-9A-Fa-f]{6}|#[0-9A-Fa-f]{3}|rgb\([^)]+\)|rgba\([^)]+\)),\s*(#[0-9A-Fa-f]{6}|#[0-9A-Fa-f]{3}|rgb\([^)]+\)|rgba\([^)]+\))\)/i);
+    
+    if (gradientMatch) {
+      const direction = gradientMatch[1] || 'right';
+      let color1 = gradientMatch[2];
+      let color2 = gradientMatch[3];
+      
+      // Convert rgb/rgba to hex if needed
+      if (color1.startsWith('rgb')) {
+        color1 = extractHexFromRgba(color1);
+      }
+      if (color2.startsWith('rgb')) {
+        color2 = extractHexFromRgba(color2);
+      }
+      
+      // Normalize hex colors (expand 3-digit to 6-digit)
+      if (color1 && color1.startsWith('#') && color1.length === 4) {
+        color1 = '#' + color1[1] + color1[1] + color1[2] + color1[2] + color1[3] + color1[3];
+      }
+      if (color2 && color2.startsWith('#') && color2.length === 4) {
+        color2 = '#' + color2[1] + color2[1] + color2[2] + color2[2] + color2[3] + color2[3];
+      }
+      
+      return { color1: color1 || '#3b82f6', color2: color2 || '#06b6d4', direction };
+    }
+    
+    return { color1: '#3b82f6', color2: '#06b6d4', direction: 'to right' };
+  };
+
+  const buildGradient = (color1, color2, direction = 'right') => {
+    // Normalize direction
+    const dir = direction.startsWith('to ') ? direction : `to ${direction}`;
+    return `linear-gradient(${dir}, ${color1}, ${color2})`;
+  };
+
+  const extractHexFromRgba = (rgbaString) => {
+    if (!rgbaString || typeof rgbaString !== 'string') {
+      return '#ffffff';
+    }
+    
+    // Match rgba or rgb pattern
+    const rgbaMatch = rgbaString.match(/(?:rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*[\d.]+)?\))/i);
+    
+    if (rgbaMatch) {
+      const r = parseInt(rgbaMatch[1], 10);
+      const g = parseInt(rgbaMatch[2], 10);
+      const b = parseInt(rgbaMatch[3], 10);
+      return rgbaToHex(r, g, b);
+    }
+    
+    // If it's already a hex color, return it
+    if (rgbaString.startsWith('#')) {
+      return rgbaString.length === 4 
+        ? '#' + rgbaString[1] + rgbaString[1] + rgbaString[2] + rgbaString[2] + rgbaString[3] + rgbaString[3]
+        : rgbaString;
+    }
+    
+    return '#ffffff';
+  };
+
+  const rgbaToHex = (r, g, b) => {
+    const toHex = (n) => {
+      const hex = Math.max(0, Math.min(255, n)).toString(16);
+      return hex.length === 1 ? '0' + hex : hex;
+    };
+    return '#' + toHex(r) + toHex(g) + toHex(b);
+  };
+
+  // Handle file upload for background image
+  const handleImageUpload = (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    
+    // Validate file type
+    const validTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
+    if (!validTypes.includes(file.type)) {
+      toast.error('Please select a valid image file (JPG, PNG, GIF, or WEBP)');
+      return;
+    }
+    
+    // Validate file size (max 5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error('Image size must be less than 5MB');
+      return;
+    }
+    
+    // Read file as data URL
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const dataUrl = e.target.result;
+      setThemeSettings({
+        ...themeSettings,
+        background: { ...themeSettings.background, image: dataUrl }
+      });
+      toast.success('Image uploaded successfully');
+    };
+    reader.onerror = () => {
+      toast.error('Failed to read image file');
+    };
+    reader.readAsDataURL(file);
   };
 
   // Update Linkvertise settings mutation
@@ -795,16 +905,51 @@ const Admin = () => {
                         </div>
                         <div>
                           <label className="block text-sm font-medium text-gray-700 mb-2">Sidebar Background</label>
-                          <input
-                            type="text"
-                            value={themeSettings.colors?.sidebarBg || ''}
-                            onChange={(e) => setThemeSettings({
-                              ...themeSettings,
-                              colors: { ...themeSettings.colors, sidebarBg: e.target.value }
-                            })}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
-                            placeholder="linear-gradient(to bottom, #1f2937, #111827)"
-                          />
+                          <div className="flex gap-2">
+                            {(() => {
+                              const gradient = parseGradientColors(themeSettings.colors?.sidebarBg || 'linear-gradient(to bottom, #1f2937, #111827)');
+                              return (
+                                <>
+                                  <input
+                                    type="color"
+                                    value={gradient.color1}
+                                    onChange={(e) => {
+                                      const newGradient = buildGradient(e.target.value, gradient.color2, gradient.direction);
+                                      setThemeSettings({
+                                        ...themeSettings,
+                                        colors: { ...themeSettings.colors, sidebarBg: newGradient }
+                                      });
+                                    }}
+                                    className="h-10 w-20 rounded border border-gray-300 cursor-pointer"
+                                    title="First color"
+                                  />
+                                  <input
+                                    type="text"
+                                    value={themeSettings.colors?.sidebarBg || ''}
+                                    onChange={(e) => setThemeSettings({
+                                      ...themeSettings,
+                                      colors: { ...themeSettings.colors, sidebarBg: e.target.value }
+                                    })}
+                                    className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                                    placeholder="linear-gradient(to bottom, #1f2937, #111827)"
+                                  />
+                                  <input
+                                    type="color"
+                                    value={gradient.color2}
+                                    onChange={(e) => {
+                                      const newGradient = buildGradient(gradient.color1, e.target.value, gradient.direction);
+                                      setThemeSettings({
+                                        ...themeSettings,
+                                        colors: { ...themeSettings.colors, sidebarBg: newGradient }
+                                      });
+                                    }}
+                                    className="h-10 w-20 rounded border border-gray-300 cursor-pointer"
+                                    title="Second color"
+                                  />
+                                </>
+                              );
+                            })()}
+                          </div>
                         </div>
                         <div>
                           <label className="block text-sm font-medium text-gray-700 mb-2">Sidebar Text</label>
@@ -831,29 +976,85 @@ const Admin = () => {
                         </div>
                         <div>
                           <label className="block text-sm font-medium text-gray-700 mb-2">Card Background</label>
-                          <input
-                            type="text"
-                            value={themeSettings.colors?.cardBg || ''}
-                            onChange={(e) => setThemeSettings({
-                              ...themeSettings,
-                              colors: { ...themeSettings.colors, cardBg: e.target.value }
-                            })}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
-                            placeholder="rgba(255, 255, 255, 0.8)"
-                          />
+                          <div className="flex gap-2">
+                            <input
+                              type="color"
+                              value={extractHexFromRgba(themeSettings.colors?.cardBg || 'rgba(255, 255, 255, 0.8)')}
+                              onChange={(e) => {
+                                // Preserve alpha if it exists, otherwise use 0.8
+                                const currentValue = themeSettings.colors?.cardBg || 'rgba(255, 255, 255, 0.8)';
+                                const alphaMatch = currentValue.match(/[\d.]+(?=\))/);
+                                const alpha = alphaMatch ? alphaMatch[0] : '0.8';
+                                const hex = e.target.value;
+                                const r = parseInt(hex.slice(1, 3), 16);
+                                const g = parseInt(hex.slice(3, 5), 16);
+                                const b = parseInt(hex.slice(5, 7), 16);
+                                setThemeSettings({
+                                  ...themeSettings,
+                                  colors: { ...themeSettings.colors, cardBg: `rgba(${r}, ${g}, ${b}, ${alpha})` }
+                                });
+                              }}
+                              className="h-10 w-20 rounded border border-gray-300 cursor-pointer"
+                            />
+                            <input
+                              type="text"
+                              value={themeSettings.colors?.cardBg || ''}
+                              onChange={(e) => setThemeSettings({
+                                ...themeSettings,
+                                colors: { ...themeSettings.colors, cardBg: e.target.value }
+                              })}
+                              className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                              placeholder="rgba(255, 255, 255, 0.8)"
+                            />
+                          </div>
                         </div>
                         <div>
                           <label className="block text-sm font-medium text-gray-700 mb-2">Main Background</label>
-                          <input
-                            type="text"
-                            value={themeSettings.colors?.background || ''}
-                            onChange={(e) => setThemeSettings({
-                              ...themeSettings,
-                              colors: { ...themeSettings.colors, background: e.target.value }
-                            })}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
-                            placeholder="linear-gradient(...)"
-                          />
+                          <div className="flex gap-2">
+                            {(() => {
+                              const gradient = parseGradientColors(themeSettings.colors?.background || 'linear-gradient(to bottom right, #f3f4f6, #e5e7eb)');
+                              return (
+                                <>
+                                  <input
+                                    type="color"
+                                    value={gradient.color1}
+                                    onChange={(e) => {
+                                      const newGradient = buildGradient(e.target.value, gradient.color2, gradient.direction);
+                                      setThemeSettings({
+                                        ...themeSettings,
+                                        colors: { ...themeSettings.colors, background: newGradient }
+                                      });
+                                    }}
+                                    className="h-10 w-20 rounded border border-gray-300 cursor-pointer"
+                                    title="First color"
+                                  />
+                                  <input
+                                    type="text"
+                                    value={themeSettings.colors?.background || ''}
+                                    onChange={(e) => setThemeSettings({
+                                      ...themeSettings,
+                                      colors: { ...themeSettings.colors, background: e.target.value }
+                                    })}
+                                    className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                                    placeholder="linear-gradient(...)"
+                                  />
+                                  <input
+                                    type="color"
+                                    value={gradient.color2}
+                                    onChange={(e) => {
+                                      const newGradient = buildGradient(gradient.color1, e.target.value, gradient.direction);
+                                      setThemeSettings({
+                                        ...themeSettings,
+                                        colors: { ...themeSettings.colors, background: newGradient }
+                                      });
+                                    }}
+                                    className="h-10 w-20 rounded border border-gray-300 cursor-pointer"
+                                    title="Second color"
+                                  />
+                                </>
+                              );
+                            })()}
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -862,23 +1063,61 @@ const Admin = () => {
                     <div>
                       <h3 className="text-lg font-medium text-gray-900 mb-4">Navigation Item Colors</h3>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        {['dashboard', 'servers', 'earnCoins', 'store', 'admin'].map((navItem) => (
-                          <div key={navItem}>
-                            <label className="block text-sm font-medium text-gray-700 mb-2 capitalize">
-                              {navItem === 'earnCoins' ? 'Earn Coins' : navItem}
-                            </label>
-                            <input
-                              type="text"
-                              value={themeSettings.navigation?.[navItem] || ''}
-                              onChange={(e) => setThemeSettings({
-                                ...themeSettings,
-                                navigation: { ...themeSettings.navigation, [navItem]: e.target.value }
-                              })}
-                              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
-                              placeholder="linear-gradient(to right, #3b82f6, #06b6d4)"
-                            />
-                          </div>
-                        ))}
+                        {['dashboard', 'servers', 'earnCoins', 'store', 'admin'].map((navItem) => {
+                          const defaultGradients = {
+                            dashboard: 'linear-gradient(to right, #3b82f6, #06b6d4)',
+                            servers: 'linear-gradient(to right, #a855f7, #ec4899)',
+                            earnCoins: 'linear-gradient(to right, #10b981, #14b8a6)',
+                            store: 'linear-gradient(to right, #f59e0b, #f97316)',
+                            admin: 'linear-gradient(to right, #ef4444, #f43f5e)'
+                          };
+                          const gradient = parseGradientColors(themeSettings.navigation?.[navItem] || defaultGradients[navItem] || 'linear-gradient(to right, #3b82f6, #06b6d4)');
+                          return (
+                            <div key={navItem}>
+                              <label className="block text-sm font-medium text-gray-700 mb-2 capitalize">
+                                {navItem === 'earnCoins' ? 'Earn Coins' : navItem}
+                              </label>
+                              <div className="flex gap-2">
+                                <input
+                                  type="color"
+                                  value={gradient.color1}
+                                  onChange={(e) => {
+                                    const newGradient = buildGradient(e.target.value, gradient.color2, gradient.direction);
+                                    setThemeSettings({
+                                      ...themeSettings,
+                                      navigation: { ...themeSettings.navigation, [navItem]: newGradient }
+                                    });
+                                  }}
+                                  className="h-10 w-20 rounded border border-gray-300 cursor-pointer"
+                                  title="First color"
+                                />
+                                <input
+                                  type="text"
+                                  value={themeSettings.navigation?.[navItem] || ''}
+                                  onChange={(e) => setThemeSettings({
+                                    ...themeSettings,
+                                    navigation: { ...themeSettings.navigation, [navItem]: e.target.value }
+                                  })}
+                                  className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                                  placeholder="linear-gradient(to right, #3b82f6, #06b6d4)"
+                                />
+                                <input
+                                  type="color"
+                                  value={gradient.color2}
+                                  onChange={(e) => {
+                                    const newGradient = buildGradient(gradient.color1, e.target.value, gradient.direction);
+                                    setThemeSettings({
+                                      ...themeSettings,
+                                      navigation: { ...themeSettings.navigation, [navItem]: newGradient }
+                                    });
+                                  }}
+                                  className="h-10 w-20 rounded border border-gray-300 cursor-pointer"
+                                  title="Second color"
+                                />
+                              </div>
+                            </div>
+                          );
+                        })}
                       </div>
                     </div>
 
@@ -888,16 +1127,32 @@ const Admin = () => {
                       <div className="space-y-4">
                         <div>
                           <label className="block text-sm font-medium text-gray-700 mb-2">Image URL</label>
-                          <input
-                            type="url"
-                            value={themeSettings.background?.image || ''}
-                            onChange={(e) => setThemeSettings({
-                              ...themeSettings,
-                              background: { ...themeSettings.background, image: e.target.value }
-                            })}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
-                            placeholder="https://example.com/image.jpg"
-                          />
+                          <div className="flex gap-2">
+                            <input
+                              type="url"
+                              value={themeSettings.background?.image || ''}
+                              onChange={(e) => setThemeSettings({
+                                ...themeSettings,
+                                background: { ...themeSettings.background, image: e.target.value }
+                              })}
+                              className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                              placeholder="https://example.com/image.jpg"
+                            />
+                            <input
+                              type="file"
+                              ref={fileInputRef}
+                              onChange={handleImageUpload}
+                              accept="image/jpeg,image/jpg,image/png,image/gif,image/webp"
+                              className="hidden"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => fileInputRef.current?.click()}
+                              className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition-colors"
+                            >
+                              Browse
+                            </button>
+                          </div>
                         </div>
                         <div className="grid grid-cols-2 gap-4">
                           <div>
@@ -935,16 +1190,37 @@ const Admin = () => {
                         </div>
                         <div>
                           <label className="block text-sm font-medium text-gray-700 mb-2">Overlay Color</label>
-                          <input
-                            type="text"
-                            value={themeSettings.background?.overlay || 'rgba(0, 0, 0, 0)'}
-                            onChange={(e) => setThemeSettings({
-                              ...themeSettings,
-                              background: { ...themeSettings.background, overlay: e.target.value }
-                            })}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
-                            placeholder="rgba(0, 0, 0, 0.5)"
-                          />
+                          <div className="flex gap-2">
+                            <input
+                              type="color"
+                              value={extractHexFromRgba(themeSettings.background?.overlay || 'rgba(0, 0, 0, 0)')}
+                              onChange={(e) => {
+                                // Preserve alpha if it exists, otherwise use 0
+                                const currentValue = themeSettings.background?.overlay || 'rgba(0, 0, 0, 0)';
+                                const alphaMatch = currentValue.match(/[\d.]+(?=\))/);
+                                const alpha = alphaMatch ? alphaMatch[0] : '0';
+                                const hex = e.target.value;
+                                const r = parseInt(hex.slice(1, 3), 16);
+                                const g = parseInt(hex.slice(3, 5), 16);
+                                const b = parseInt(hex.slice(5, 7), 16);
+                                setThemeSettings({
+                                  ...themeSettings,
+                                  background: { ...themeSettings.background, overlay: `rgba(${r}, ${g}, ${b}, ${alpha})` }
+                                });
+                              }}
+                              className="h-10 w-20 rounded border border-gray-300 cursor-pointer"
+                            />
+                            <input
+                              type="text"
+                              value={themeSettings.background?.overlay || 'rgba(0, 0, 0, 0)'}
+                              onChange={(e) => setThemeSettings({
+                                ...themeSettings,
+                                background: { ...themeSettings.background, overlay: e.target.value }
+                              })}
+                              className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                              placeholder="rgba(0, 0, 0, 0.5)"
+                            />
+                          </div>
                         </div>
                       </div>
                     </div>
