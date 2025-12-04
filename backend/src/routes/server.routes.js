@@ -126,7 +126,19 @@ router.post(
   '/create',
   [
     body('name').trim().isLength({ min: 1, max: 50 }),
-    body('game_type').isIn(['minecraft', 'fivem', 'other']),
+    body('game_type').custom((value) => {
+      // Validate game_type dynamically
+      if (value === 'minecraft') {
+        return Promise.resolve(true);
+      }
+      // Check if it's a custom game (sync check using cached config)
+      const customGames = pterodactylConfig.customGames || [];
+      const customGameNames = customGames.map(g => g.name.toLowerCase());
+      if (customGameNames.includes(value.toLowerCase())) {
+        return Promise.resolve(true);
+      }
+      return Promise.reject(new Error(`Invalid game type. Must be 'minecraft' or one of the configured custom games.`));
+    }),
     body('cpu_limit').isInt({ min: 1, max: 1000 }).withMessage('CPU limit must be between 1 and 1000'),
     body('memory_limit').isInt({ min: 512, max: 32768 }).withMessage('Memory limit must be between 512MB and 32768MB'),
     body('disk_limit').isInt({ min: 1024, max: 1000000 }).withMessage('Disk limit must be between 1024MB and 1000000MB'),
@@ -163,14 +175,36 @@ router.post(
       await client.query('BEGIN');
       
       try {
+        // Refresh config to get latest custom games
+        await pterodactylConfig.refresh();
+        
         // Get Pterodactyl user ID
         // Note: In production, you should create/sync users in Pterodactyl when they register
         // For now, using environment variable or defaulting to user ID
         // This should be the Pterodactyl user ID (integer), not our UUID
         const pterodactylUserId = parseInt(process.env.PTERODACTYL_DEFAULT_USER_ID || '1');
         
-        // Get egg ID based on game type
-        const eggId = pterodactylConfig.gameTypeEggs[game_type] || pterodactylConfig.gameTypeEggs.other;
+        // Determine nest ID and egg ID based on game type
+        let nestId, eggId, startup;
+        
+        if (game_type === 'minecraft') {
+          // Minecraft uses default nest ID and Minecraft egg ID
+          nestId = pterodactylConfig.defaultNestId;
+          eggId = pterodactylConfig.gameTypeEggs.minecraft;
+          startup = 'java -Xms128M -Xmx{{SERVER_MEMORY}}M -jar {{SERVER_JARFILE}}';
+        } else {
+          // Find custom game
+          const customGames = pterodactylConfig.customGames || [];
+          const customGame = customGames.find(g => g.name.toLowerCase() === game_type.toLowerCase());
+          
+          if (!customGame) {
+            throw new Error(`Custom game '${game_type}' not found. Please configure it in Admin Panel > Settings > Pterodactyl Configuration.`);
+          }
+          
+          nestId = customGame.nestId;
+          eggId = customGame.eggId;
+          startup = ''; // Custom games may have their own startup commands
+        }
         
         // Create server in Pterodactyl
         const pterodactylServer = await pterodactylService.createServer({
@@ -183,14 +217,10 @@ router.post(
           io: 500,
           swap: 0,
           nodeId: pterodactylConfig.defaultNodeId,
-          nestId: pterodactylConfig.defaultNestId,
+          nestId: nestId,
           eggId: eggId,
           dockerImage: 'ghcr.io/pterodactyl/games:latest',
-          startup: game_type === 'minecraft' 
-            ? 'java -Xms128M -Xmx{{SERVER_MEMORY}}M -jar {{SERVER_JARFILE}}'
-            : game_type === 'fivem'
-            ? './run.sh'
-            : '',
+          startup: startup,
           environment: {},
         });
         

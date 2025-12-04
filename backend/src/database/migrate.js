@@ -82,6 +82,26 @@ async function migrate() {
       console.warn('⚠️  Resource pricing migration file not found, skipping...');
     }
     
+    // Run Pterodactyl custom games migration
+    const customGamesPath = path.join(__dirname, 'migrate-pterodactyl-custom-games.sql');
+    if (fs.existsSync(customGamesPath)) {
+      const customGames = fs.readFileSync(customGamesPath, 'utf8');
+      await pool.query(customGames);
+      console.log('✅ Pterodactyl custom games migration completed');
+    } else {
+      console.warn('⚠️  Pterodactyl custom games migration file not found, skipping...');
+    }
+    
+    // Run server templates game type migration
+    const serverTemplatesGameTypePath = path.join(__dirname, 'migrate-server-templates-game-type.sql');
+    if (fs.existsSync(serverTemplatesGameTypePath)) {
+      const serverTemplatesGameType = fs.readFileSync(serverTemplatesGameTypePath, 'utf8');
+      await pool.query(serverTemplatesGameType);
+      console.log('✅ Server templates game type migration completed');
+    } else {
+      console.warn('⚠️  Server templates game type migration file not found, skipping...');
+    }
+    
     console.log('✅ Database migration completed successfully');
     process.exit(0);
   } catch (error) {

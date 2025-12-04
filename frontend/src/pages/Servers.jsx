@@ -40,6 +40,7 @@ const Servers = () => {
     return res.data;
   });
 
+
   // Calculate estimated cost
   const calculateCost = () => {
     if (!pricing) return 0;
@@ -159,15 +160,15 @@ const Servers = () => {
                   <label className="block text-sm font-semibold text-gray-700 mb-2">
                     Game Type
                   </label>
-                  <select
+                  <input
+                    type="text"
                     value={formData.game_type}
                     onChange={(e) => setFormData({ ...formData, game_type: e.target.value })}
+                    placeholder="minecraft or custom game name"
                     className="w-full px-4 py-3 bg-white/80 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
-                  >
-                    <option value="minecraft">Minecraft</option>
-                    <option value="fivem">FiveM</option>
-                    <option value="other">Other</option>
-                  </select>
+                    required
+                  />
+                  <p className="text-xs text-gray-500 mt-1">Enter "minecraft" or a custom game name configured in Admin Panel</p>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">

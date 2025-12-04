@@ -19,7 +19,6 @@ import {
   Cog6ToothIcon,
   ExclamationTriangleIcon,
   CheckCircleIcon,
-  InformationCircleIcon,
   SparklesIcon,
   PlusIcon
 } from '@heroicons/react/24/outline';
@@ -48,9 +47,8 @@ const Admin = () => {
     nodeId: 1,
     nestId: 1,
     eggIdMinecraft: 1,
-    eggIdFivem: 2,
-    eggIdOther: 1,
     defaultUserId: 1,
+    customGames: [],
   });
   const [pterodactylOptions, setPterodactylOptions] = useState({
     nodes: [],
@@ -262,6 +260,11 @@ const Admin = () => {
     },
     {
       onSuccess: (data) => {
+        // Add 'id' field to custom games for React keys
+        const customGamesWithIds = (data.customGames || []).map((game, index) => ({
+          ...game,
+          id: game.id || `game-${index}-${Date.now()}`,
+        }));
         setPterodactylSettings({
           url: data.url || '',
           apiKey: data.apiKey || '',
@@ -270,9 +273,8 @@ const Admin = () => {
           nodeId: data.nodeId || 1,
           nestId: data.nestId || 1,
           eggIdMinecraft: data.eggIds?.minecraft || 1,
-          eggIdFivem: data.eggIds?.fivem || 2,
-          eggIdOther: data.eggIds?.other || 1,
           defaultUserId: data.defaultUserId || 1,
+          customGames: customGamesWithIds,
         });
       },
     }
@@ -358,10 +360,45 @@ const Admin = () => {
   const handlePterodactylSubmit = (e) => {
     e.preventDefault();
     setSettingsLoading(true);
-    updatePterodactylMutation.mutate(pterodactylSettings, {
+    // Remove 'id' field from customGames (only used for React keys)
+    const submitData = {
+      ...pterodactylSettings,
+      customGames: pterodactylSettings.customGames.map(({ id, ...game }) => game),
+    };
+    updatePterodactylMutation.mutate(submitData, {
       onSettled: () => {
         setSettingsLoading(false);
       },
+    });
+  };
+
+  // Custom games management
+  const addCustomGame = () => {
+    const newGame = {
+      id: `temp-${Date.now()}`, // Temporary ID for React key
+      name: '',
+      nestId: pterodactylSettings.nestId || 1,
+      eggId: 1,
+    };
+    setPterodactylSettings({
+      ...pterodactylSettings,
+      customGames: [...pterodactylSettings.customGames, newGame],
+    });
+  };
+
+  const removeCustomGame = (gameId) => {
+    setPterodactylSettings({
+      ...pterodactylSettings,
+      customGames: pterodactylSettings.customGames.filter(g => g.id !== gameId),
+    });
+  };
+
+  const updateCustomGame = (gameId, field, value) => {
+    setPterodactylSettings({
+      ...pterodactylSettings,
+      customGames: pterodactylSettings.customGames.map(game =>
+        game.id === gameId ? { ...game, [field]: value } : game
+      ),
     });
   };
 
@@ -770,19 +807,8 @@ const Admin = () => {
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div className="md:col-span-2">
-                      <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
                         Pterodactyl Panel URL
-                        <div className="group relative inline-flex">
-                          <InformationCircleIcon className="h-4 w-4 text-gray-400 hover:text-gray-600 cursor-help" aria-label="Information about Pterodactyl Panel URL" />
-                          <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 hidden group-hover:block z-50">
-                            <div className="bg-gray-900 text-white text-xs rounded-lg py-2 px-3 shadow-lg max-w-xs">
-                              Enter the full URL of your Pterodactyl Panel (e.g., https://panel.yourdomain.com). This is where your Pterodactyl installation is hosted.
-                              <div className="absolute top-full left-1/2 transform -translate-x-1/2 -mt-1">
-                                <div className="border-4 border-transparent border-t-gray-900"></div>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
                       </label>
                       <input
                         type="url"
@@ -796,19 +822,8 @@ const Admin = () => {
                     </div>
 
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
                         Application API Key
-                        <div className="group relative inline-flex">
-                          <InformationCircleIcon className="h-4 w-4 text-gray-400 hover:text-gray-600 cursor-help" aria-label="Information about Application API Key" />
-                          <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 hidden group-hover:block z-50">
-                            <div className="bg-gray-900 text-white text-xs rounded-lg py-2 px-3 shadow-lg max-w-xs">
-                              Get this from your Pterodactyl Panel: Settings → API Credentials → Application API. This key is required for server creation and management.
-                              <div className="absolute top-full left-1/2 transform -translate-x-1/2 -mt-1">
-                                <div className="border-4 border-transparent border-t-gray-900"></div>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
                       </label>
                       <input
                         type="password"
@@ -861,19 +876,8 @@ const Admin = () => {
                     </div>
 
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
                         Client API Key
-                        <div className="group relative inline-flex">
-                          <InformationCircleIcon className="h-4 w-4 text-gray-400 hover:text-gray-600 cursor-help" aria-label="Information about Client API Key" />
-                          <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 hidden group-hover:block z-50">
-                            <div className="bg-gray-900 text-white text-xs rounded-lg py-2 px-3 shadow-lg max-w-xs">
-                              Optional. Get this from your Pterodactyl Panel: Settings → API Credentials → Client API. Used for checking server status and resource usage.
-                              <div className="absolute top-full left-1/2 transform -translate-x-1/2 -mt-1">
-                                <div className="border-4 border-transparent border-t-gray-900"></div>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
                       </label>
                       <input
                         type="password"
@@ -886,19 +890,8 @@ const Admin = () => {
                     </div>
 
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
                         API Key (Legacy)
-                        <div className="group relative inline-flex">
-                          <InformationCircleIcon className="h-4 w-4 text-gray-400 hover:text-gray-600 cursor-help" aria-label="Information about Legacy API Key" />
-                          <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 hidden group-hover:block z-50">
-                            <div className="bg-gray-900 text-white text-xs rounded-lg py-2 px-3 shadow-lg max-w-xs">
-                              Optional. Legacy API key format. Only needed if you're using an older Pterodactyl version.
-                              <div className="absolute top-full left-1/2 transform -translate-x-1/2 -mt-1">
-                                <div className="border-4 border-transparent border-t-gray-900"></div>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
                       </label>
                       <input
                         type="password"
@@ -917,19 +910,8 @@ const Admin = () => {
                     </div>
 
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
                         Default Node ID
-                        <div className="group relative inline-flex">
-                          <InformationCircleIcon className="h-4 w-4 text-gray-400 hover:text-gray-600 cursor-help" aria-label="Information about Default Node ID" />
-                          <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 hidden group-hover:block z-50">
-                            <div className="bg-gray-900 text-white text-xs rounded-lg py-2 px-3 shadow-lg max-w-xs">
-                              The ID of the Pterodactyl node where servers will be created. Find this in your Pterodactyl Panel under Locations → Nodes.
-                              <div className="absolute top-full left-1/2 transform -translate-x-1/2 -mt-1">
-                                <div className="border-4 border-transparent border-t-gray-900"></div>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
                       </label>
                       {pterodactylOptions.nodes.length > 0 ? (
                         <select
@@ -961,19 +943,8 @@ const Admin = () => {
                     </div>
 
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
                         Default Nest ID
-                        <div className="group relative inline-flex">
-                          <InformationCircleIcon className="h-4 w-4 text-gray-400 hover:text-gray-600 cursor-help" aria-label="Information about Default Nest ID" />
-                          <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 hidden group-hover:block z-50">
-                            <div className="bg-gray-900 text-white text-xs rounded-lg py-2 px-3 shadow-lg max-w-xs">
-                              The ID of the Pterodactyl nest (game type collection). Find this in your Pterodactyl Panel under Nests.
-                              <div className="absolute top-full left-1/2 transform -translate-x-1/2 -mt-1">
-                                <div className="border-4 border-transparent border-t-gray-900"></div>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
                       </label>
                       {pterodactylOptions.nests.length > 0 ? (
                         <select
@@ -1008,19 +979,8 @@ const Admin = () => {
                     </div>
 
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
                         Minecraft Egg ID
-                        <div className="group relative inline-flex">
-                          <InformationCircleIcon className="h-4 w-4 text-gray-400 hover:text-gray-600 cursor-help" aria-label="Information about Minecraft Egg ID" />
-                          <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 hidden group-hover:block z-50">
-                            <div className="bg-gray-900 text-white text-xs rounded-lg py-2 px-3 shadow-lg max-w-xs">
-                              The specific egg ID for Minecraft servers. Find this in your Pterodactyl Panel under Nests → Minecraft → Eggs.
-                              <div className="absolute top-full left-1/2 transform -translate-x-1/2 -mt-1">
-                                <div className="border-4 border-transparent border-t-gray-900"></div>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
                       </label>
                       {Object.keys(pterodactylOptions.eggsByNest).length > 0 ? (
                         <select
@@ -1053,112 +1013,128 @@ const Admin = () => {
                       )}
                     </div>
 
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
-                        FiveM Egg ID
-                        <div className="group relative inline-flex">
-                          <InformationCircleIcon className="h-4 w-4 text-gray-400 hover:text-gray-600 cursor-help" aria-label="Information about FiveM Egg ID" />
-                          <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 hidden group-hover:block z-50">
-                            <div className="bg-gray-900 text-white text-xs rounded-lg py-2 px-3 shadow-lg max-w-xs">
-                              The specific egg ID for FiveM servers. Find this in your Pterodactyl Panel under Nests → FiveM → Eggs.
-                              <div className="absolute top-full left-1/2 transform -translate-x-1/2 -mt-1">
-                                <div className="border-4 border-transparent border-t-gray-900"></div>
+                    {/* Custom Games/Apps Section */}
+                    <div className="md:col-span-2 mt-4 pt-6 border-t border-gray-200">
+                      <div className="flex items-center justify-between mb-4">
+                        <div>
+                          <h3 className="text-sm font-semibold text-gray-800">Custom Games/Apps</h3>
+                          <p className="text-xs text-gray-600 mt-1">Add custom games or apps. Each game requires a Nest ID and Egg ID from your Pterodactyl Panel.</p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={addCustomGame}
+                          className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors flex items-center gap-2"
+                        >
+                          <PlusIcon className="h-4 w-4" />
+                          <span>Add Game/App</span>
+                        </button>
+                      </div>
+
+                      {pterodactylSettings.customGames.length === 0 ? (
+                        <div className="text-center py-8 text-gray-500 text-sm">
+                          No custom games added yet. Click "Add Game/App" to add one.
+                        </div>
+                      ) : (
+                        <div className="space-y-4">
+                          {pterodactylSettings.customGames.map((game) => (
+                            <div key={game.id} className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+                              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                <div>
+                                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                                    Game/App Name
+                                  </label>
+                                  <input
+                                    type="text"
+                                    value={game.name}
+                                    onChange={(e) => updateCustomGame(game.id, 'name', e.target.value)}
+                                    placeholder="e.g., FiveM, Rust"
+                                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                                    required
+                                  />
+                                </div>
+                                <div>
+                                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                                    Nest ID
+                                  </label>
+                                  {pterodactylOptions.nests.length > 0 ? (
+                                    <select
+                                      value={game.nestId}
+                                      onChange={(e) => {
+                                        const newNestId = parseInt(e.target.value) || 1;
+                                        updateCustomGame(game.id, 'nestId', newNestId);
+                                        // Reset eggId when nest changes
+                                        updateCustomGame(game.id, 'eggId', 1);
+                                      }}
+                                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                                      required
+                                    >
+                                      {pterodactylOptions.nests.map((nest) => (
+                                        <option key={nest.id} value={nest.id}>
+                                          {nest.name} (ID: {nest.id})
+                                        </option>
+                                      ))}
+                                    </select>
+                                  ) : (
+                                    <input
+                                      type="number"
+                                      min="1"
+                                      value={game.nestId}
+                                      onChange={(e) => updateCustomGame(game.id, 'nestId', parseInt(e.target.value) || 1)}
+                                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                                      placeholder="Enter Nest ID manually"
+                                      required
+                                    />
+                                  )}
+                                </div>
+                                <div>
+                                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                                    Egg ID
+                                  </label>
+                                  {pterodactylOptions.eggsByNest[game.nestId] && pterodactylOptions.eggsByNest[game.nestId].length > 0 ? (
+                                    <select
+                                      value={game.eggId}
+                                      onChange={(e) => updateCustomGame(game.id, 'eggId', parseInt(e.target.value) || 1)}
+                                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                                      required
+                                    >
+                                      {pterodactylOptions.eggsByNest[game.nestId].map((egg) => (
+                                        <option key={egg.id} value={egg.id}>
+                                          {egg.name} (ID: {egg.id})
+                                        </option>
+                                      ))}
+                                    </select>
+                                  ) : (
+                                    <input
+                                      type="number"
+                                      min="1"
+                                      value={game.eggId}
+                                      onChange={(e) => updateCustomGame(game.id, 'eggId', parseInt(e.target.value) || 1)}
+                                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                                      placeholder="Enter Egg ID manually"
+                                      required
+                                    />
+                                  )}
+                                </div>
+                              </div>
+                              <div className="mt-3 flex justify-end">
+                                <button
+                                  type="button"
+                                  onClick={() => removeCustomGame(game.id)}
+                                  className="px-3 py-1 text-sm text-red-600 hover:text-red-800 hover:bg-red-50 rounded transition-colors flex items-center gap-1"
+                                >
+                                  <TrashIcon className="h-4 w-4" />
+                                  <span>Remove</span>
+                                </button>
                               </div>
                             </div>
-                          </div>
+                          ))}
                         </div>
-                      </label>
-                      {Object.keys(pterodactylOptions.eggsByNest).length > 0 ? (
-                        <select
-                          value={pterodactylSettings.eggIdFivem}
-                          onChange={(e) => setPterodactylSettings({ ...pterodactylSettings, eggIdFivem: parseInt(e.target.value) || 2 })}
-                          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                          required
-                        >
-                          {Object.entries(pterodactylOptions.eggsByNest).flatMap(([nestId, eggs]) =>
-                            eggs.map((egg) => (
-                              <option key={`${nestId}-${egg.id}`} value={egg.id}>
-                                {egg.name} (ID: {egg.id})
-                              </option>
-                            ))
-                          )}
-                        </select>
-                      ) : (
-                        <input
-                          type="number"
-                          min="1"
-                          value={pterodactylSettings.eggIdFivem}
-                          onChange={(e) => setPterodactylSettings({ ...pterodactylSettings, eggIdFivem: parseInt(e.target.value) || 2 })}
-                          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                          placeholder="Enter Egg ID manually"
-                          required
-                        />
-                      )}
-                      {Object.keys(pterodactylOptions.eggsByNest).length === 0 && (
-                        <p className="mt-1 text-xs text-gray-500">Click "Test Connection & Fetch Options" to load available eggs</p>
                       )}
                     </div>
 
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
-                        Other Game Egg ID
-                        <div className="group relative inline-flex">
-                          <InformationCircleIcon className="h-4 w-4 text-gray-400 hover:text-gray-600 cursor-help" aria-label="Information about Other Game Egg ID" />
-                          <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 hidden group-hover:block z-50">
-                            <div className="bg-gray-900 text-white text-xs rounded-lg py-2 px-3 shadow-lg max-w-xs">
-                              The egg ID for other game types. Find this in your Pterodactyl Panel under Nests → [Game Type] → Eggs.
-                              <div className="absolute top-full left-1/2 transform -translate-x-1/2 -mt-1">
-                                <div className="border-4 border-transparent border-t-gray-900"></div>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      </label>
-                      {Object.keys(pterodactylOptions.eggsByNest).length > 0 ? (
-                        <select
-                          value={pterodactylSettings.eggIdOther}
-                          onChange={(e) => setPterodactylSettings({ ...pterodactylSettings, eggIdOther: parseInt(e.target.value) || 1 })}
-                          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                          required
-                        >
-                          {Object.entries(pterodactylOptions.eggsByNest).flatMap(([nestId, eggs]) =>
-                            eggs.map((egg) => (
-                              <option key={`${nestId}-${egg.id}`} value={egg.id}>
-                                {egg.name} (ID: {egg.id})
-                              </option>
-                            ))
-                          )}
-                        </select>
-                      ) : (
-                        <input
-                          type="number"
-                          min="1"
-                          value={pterodactylSettings.eggIdOther}
-                          onChange={(e) => setPterodactylSettings({ ...pterodactylSettings, eggIdOther: parseInt(e.target.value) || 1 })}
-                          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                          placeholder="Enter Egg ID manually"
-                          required
-                        />
-                      )}
-                      {Object.keys(pterodactylOptions.eggsByNest).length === 0 && (
-                        <p className="mt-1 text-xs text-gray-500">Click "Test Connection & Fetch Options" to load available eggs</p>
-                      )}
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
                         Default User ID
-                        <div className="group relative inline-flex">
-                          <InformationCircleIcon className="h-4 w-4 text-gray-400 hover:text-gray-600 cursor-help" aria-label="Information about Default User ID" />
-                          <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 hidden group-hover:block z-50">
-                            <div className="bg-gray-900 text-white text-xs rounded-lg py-2 px-3 shadow-lg max-w-xs">
-                              The Pterodactyl user ID that will own created servers. This is usually 1 for the first admin user, or find it in Users section of your Pterodactyl Panel.
-                              <div className="absolute top-full left-1/2 transform -translate-x-1/2 -mt-1">
-                                <div className="border-4 border-transparent border-t-gray-900"></div>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
                       </label>
                       {pterodactylOptions.users.length > 0 ? (
                         <select

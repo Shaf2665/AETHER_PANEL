@@ -273,7 +273,7 @@ router.get('/servers', [
   query('page').optional().isInt({ min: 1 }).toInt(),
   query('limit').optional().isInt({ min: 1, max: 100 }).toInt(),
   query('userId').optional().isUUID(),
-  query('gameType').optional().isIn(['minecraft', 'fivem', 'other']).withMessage('Invalid game type'),
+  query('gameType').optional().isString().trim().isLength({ min: 1, max: 50 }).withMessage('Invalid game type'),
   query('status').optional().isIn(['active', 'suspended', 'deleted']).withMessage('Invalid status'),
   validate
 ], async (req, res, next) => {
@@ -498,9 +498,11 @@ router.put('/settings/pterodactyl', [
   body('nodeId').optional().isInt({ min: 1 }),
   body('nestId').optional().isInt({ min: 1 }),
   body('eggIdMinecraft').optional().isInt({ min: 1 }),
-  body('eggIdFivem').optional().isInt({ min: 1 }),
-  body('eggIdOther').optional().isInt({ min: 1 }),
   body('defaultUserId').optional().isInt({ min: 1 }),
+  body('customGames').optional().isArray().withMessage('Custom games must be an array'),
+  body('customGames.*.name').optional().isString().isLength({ min: 1, max: 100 }).withMessage('Game name must be between 1 and 100 characters'),
+  body('customGames.*.nestId').optional().isInt({ min: 1 }).withMessage('Nest ID must be a positive integer'),
+  body('customGames.*.eggId').optional().isInt({ min: 1 }).withMessage('Egg ID must be a positive integer'),
   validate
 ], async (req, res, next) => {
   try {
@@ -513,9 +515,14 @@ router.put('/settings/pterodactyl', [
     if (updates.nodeId !== undefined) await Settings.set('pterodactyl_node_id', updates.nodeId.toString());
     if (updates.nestId !== undefined) await Settings.set('pterodactyl_nest_id', updates.nestId.toString());
     if (updates.eggIdMinecraft !== undefined) await Settings.set('pterodactyl_egg_id_minecraft', updates.eggIdMinecraft.toString());
-    if (updates.eggIdFivem !== undefined) await Settings.set('pterodactyl_egg_id_fivem', updates.eggIdFivem.toString());
-    if (updates.eggIdOther !== undefined) await Settings.set('pterodactyl_egg_id_other', updates.eggIdOther.toString());
     if (updates.defaultUserId !== undefined) await Settings.set('pterodactyl_default_user_id', updates.defaultUserId.toString());
+    
+    // Handle custom games
+    if (updates.customGames !== undefined) {
+      // Remove 'id' field from each game (it's only for frontend React keys)
+      const gamesToSave = updates.customGames.map(({ id, ...game }) => game);
+      await Settings.setCustomGames(gamesToSave);
+    }
 
     // Clear cache to force refresh
     pterodactylConfig.clearCache();
@@ -524,7 +531,11 @@ router.put('/settings/pterodactyl', [
     const updatedConfig = await Settings.getPterodactylConfig();
     res.json({ message: 'Settings updated successfully', config: updatedConfig });
   } catch (error) {
-    next(error);
+    console.error('Error updating Pterodactyl settings:', error);
+    if (error.message) {
+      return res.status(400).json({ error: error.message });
+    }
+    res.status(500).json({ error: 'Failed to update Pterodactyl settings' });
   }
 });
 
@@ -843,7 +854,7 @@ router.post(
     body('ram_gb').isInt({ min: 1, max: 1000 }),
     body('disk_gb').isInt({ min: 1, max: 10000 }),
     body('price').isFloat({ min: 0.01, max: 1000000 }),
-    body('game_type').isIn(['minecraft', 'fivem', 'other']),
+    body('game_type').isString().trim().isLength({ min: 1, max: 50 }).withMessage('Game type must be between 1 and 50 characters'),
     body('enabled').optional().isBoolean(),
     body('icon').trim().isLength({ min: 1 }),
     body('gradient_colors').isObject(),

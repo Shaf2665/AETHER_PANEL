@@ -368,8 +368,13 @@ class ServerTemplate {
     }
     
     if (data.game_type !== undefined) {
-      const validTypes = ['minecraft', 'fivem', 'other'];
-      sanitized.game_type = validTypes.includes(data.game_type) ? data.game_type : (existing.game_type || 'other');
+      // Accept 'minecraft' or any non-empty string (for custom games)
+      const gameType = String(data.game_type).trim();
+      if (gameType === '' || gameType.length > 50) {
+        sanitized.game_type = existing.game_type || 'minecraft';
+      } else {
+        sanitized.game_type = gameType;
+      }
     }
     
     if (data.enabled !== undefined) {

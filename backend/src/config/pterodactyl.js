@@ -30,9 +30,8 @@ async function getConfig() {
       defaultNestId: dbConfig.nestId || parseInt(process.env.PTERODACTYL_NEST_ID || '1', 10),
       gameTypeEggs: {
         minecraft: dbConfig.eggIds.minecraft || parseInt(process.env.PTERODACTYL_EGG_ID_MINECRAFT || process.env.PTERODACTYL_EGG_ID || '1', 10),
-        fivem: dbConfig.eggIds.fivem || parseInt(process.env.PTERODACTYL_EGG_ID_FIVEM || '2', 10),
-        other: dbConfig.eggIds.other || parseInt(process.env.PTERODACTYL_EGG_ID_OTHER || '1', 10),
       },
+      customGames: dbConfig.customGames || [],
     };
     lastCacheTime = now;
   } catch (error) {
@@ -47,9 +46,8 @@ async function getConfig() {
       defaultNestId: parseInt(process.env.PTERODACTYL_NEST_ID || '1', 10),
       gameTypeEggs: {
         minecraft: parseInt(process.env.PTERODACTYL_EGG_ID_MINECRAFT || process.env.PTERODACTYL_EGG_ID || '1', 10),
-        fivem: parseInt(process.env.PTERODACTYL_EGG_ID_FIVEM || '2', 10),
-        other: parseInt(process.env.PTERODACTYL_EGG_ID_OTHER || '1', 10),
       },
+      customGames: [],
     };
   }
 
@@ -72,9 +70,8 @@ const getEnvConfig = () => ({
   defaultNestId: parseInt(process.env.PTERODACTYL_NEST_ID || '1', 10),
   gameTypeEggs: {
     minecraft: parseInt(process.env.PTERODACTYL_EGG_ID_MINECRAFT || process.env.PTERODACTYL_EGG_ID || '1', 10),
-    fivem: parseInt(process.env.PTERODACTYL_EGG_ID_FIVEM || '2', 10),
-    other: parseInt(process.env.PTERODACTYL_EGG_ID_OTHER || '1', 10),
   },
+  customGames: [],
 });
 
 module.exports = {
@@ -98,6 +95,9 @@ module.exports = {
   },
   get gameTypeEggs() { 
     return cachedConfig?.gameTypeEggs || getEnvConfig().gameTypeEggs; 
+  },
+  get customGames() {
+    return cachedConfig?.customGames || getEnvConfig().customGames;
   },
   // Async function to refresh config
   refresh: getConfig,

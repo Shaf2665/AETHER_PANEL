@@ -52,12 +52,73 @@ class Settings {
   }
 
   /**
+   * Get custom games configuration from settings
+   * @returns {Promise<Array>} Array of custom game objects
+   */
+  static async getCustomGames() {
+    try {
+      const customGamesStr = await this.get('pterodactyl_custom_games');
+      if (!customGamesStr) {
+        return [];
+      }
+      const customGames = JSON.parse(customGamesStr);
+      if (!Array.isArray(customGames)) {
+        return [];
+      }
+      return customGames;
+    } catch (error) {
+      console.error('Error getting custom games:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Set custom games configuration
+   * @param {Array} games - Array of custom game objects
+   * @returns {Promise<void>}
+   */
+  static async setCustomGames(games) {
+    try {
+      if (!Array.isArray(games)) {
+        throw new Error('Custom games must be an array');
+      }
+      
+      // Validate each game object
+      for (const game of games) {
+        if (!game.name || typeof game.name !== 'string' || game.name.trim() === '') {
+          throw new Error('Each game must have a non-empty name');
+        }
+        if (!Number.isInteger(game.nestId) || game.nestId < 1) {
+          throw new Error('Each game must have a valid nestId (positive integer)');
+        }
+        if (!Number.isInteger(game.eggId) || game.eggId < 1) {
+          throw new Error('Each game must have a valid eggId (positive integer)');
+        }
+      }
+
+      // Check for duplicate names
+      const names = games.map(g => g.name.toLowerCase().trim());
+      const uniqueNames = new Set(names);
+      if (names.length !== uniqueNames.size) {
+        throw new Error('Game names must be unique');
+      }
+
+      const gamesStr = JSON.stringify(games);
+      await this.set('pterodactyl_custom_games', gamesStr);
+    } catch (error) {
+      console.error('Error setting custom games:', error);
+      throw error;
+    }
+  }
+
+  /**
    * Get Pterodactyl configuration from settings
    * @returns {Promise<Object>} Pterodactyl configuration object
    */
   static async getPterodactylConfig() {
     try {
       const settings = await this.getAll();
+      const customGames = await this.getCustomGames();
       return {
         url: settings.pterodactyl_url || '',
         apiKey: settings.pterodactyl_api_key || '',
@@ -67,9 +128,8 @@ class Settings {
         nestId: parseInt(settings.pterodactyl_nest_id || '1', 10),
         eggIds: {
           minecraft: parseInt(settings.pterodactyl_egg_id_minecraft || '1', 10),
-          fivem: parseInt(settings.pterodactyl_egg_id_fivem || '2', 10),
-          other: parseInt(settings.pterodactyl_egg_id_other || '1', 10),
         },
+        customGames: customGames,
         defaultUserId: parseInt(settings.pterodactyl_default_user_id || '1', 10),
       };
     } catch (error) {
@@ -83,9 +143,8 @@ class Settings {
         nestId: 1,
         eggIds: {
           minecraft: 1,
-          fivem: 2,
-          other: 1,
         },
+        customGames: [],
         defaultUserId: 1,
       };
     }
