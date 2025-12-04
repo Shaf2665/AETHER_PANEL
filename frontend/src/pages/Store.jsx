@@ -8,8 +8,25 @@ import {
   ServerIcon,
   CurrencyDollarIcon,
   ArrowRightIcon,
-  SparklesIcon
+  SparklesIcon,
+  CubeIcon,
+  ChartBarIcon,
+  Cog6ToothIcon,
+  ShieldCheckIcon
 } from '@heroicons/react/24/outline';
+
+// Icon mapping helper
+const iconMap = {
+  ServerIcon,
+  CpuChipIcon,
+  CircleStackIcon,
+  CubeIcon,
+  SparklesIcon,
+  CurrencyDollarIcon,
+  ChartBarIcon,
+  Cog6ToothIcon,
+  ShieldCheckIcon,
+};
 
 const Store = () => {
   const { data: pricing } = useQuery('pricing', async () => {
@@ -19,6 +36,12 @@ const Store = () => {
 
   const { data: balance } = useQuery('balance', async () => {
     const res = await api.get('/coins/balance');
+    return res.data;
+  });
+
+  // Fetch templates from API
+  const { data: templates, isLoading: templatesLoading } = useQuery('templates', async () => {
+    const res = await api.get('/resources/templates');
     return res.data;
   });
 
@@ -130,42 +153,69 @@ const Store = () => {
           <ServerIcon className="h-6 w-6 mr-2 text-purple-500" />
           Server Templates
         </h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div className="bg-gradient-to-br from-blue-50 to-cyan-50 border-2 border-blue-200 rounded-xl p-6 transform transition-all duration-300 hover:scale-105 hover:shadow-lg">
-            <div className="flex items-center mb-4">
-              <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-500 to-cyan-600 flex items-center justify-center shadow-lg mr-3">
-                <ServerIcon className="h-6 w-6 text-white" />
-              </div>
-              <h3 className="text-xl font-bold text-gray-900">Minecraft Server</h3>
-            </div>
-            <p className="text-gray-600 mb-4">2 CPU cores, 2GB RAM, 10GB Disk</p>
-            <div className="mb-4">
-              <p className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-cyan-600 bg-clip-text text-transparent">
-                500 coins
-              </p>
-            </div>
-            <button className="w-full px-4 py-3 bg-gradient-to-r from-blue-500 to-cyan-600 text-white rounded-xl hover:from-blue-600 hover:to-cyan-700 shadow-lg transform transition-all duration-200 hover:scale-105 font-semibold">
-              Deploy Now
-            </button>
+        {templatesLoading ? (
+          <div className="flex justify-center py-12">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
           </div>
-          <div className="bg-gradient-to-br from-purple-50 to-pink-50 border-2 border-purple-200 rounded-xl p-6 transform transition-all duration-300 hover:scale-105 hover:shadow-lg">
-            <div className="flex items-center mb-4">
-              <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-purple-500 to-pink-600 flex items-center justify-center shadow-lg mr-3">
-                <ServerIcon className="h-6 w-6 text-white" />
-              </div>
-              <h3 className="text-xl font-bold text-gray-900">FiveM Server</h3>
-            </div>
-            <p className="text-gray-600 mb-4">4 CPU cores, 4GB RAM, 20GB Disk</p>
-            <div className="mb-4">
-              <p className="text-3xl font-bold bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">
-                1000 coins
-              </p>
-            </div>
-            <button className="w-full px-4 py-3 bg-gradient-to-r from-purple-500 to-pink-600 text-white rounded-xl hover:from-purple-600 hover:to-pink-700 shadow-lg transform transition-all duration-200 hover:scale-105 font-semibold">
-              Deploy Now
-            </button>
+        ) : templates && templates.length > 0 ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {templates.map((template) => {
+              const IconComponent = iconMap[template.icon] || ServerIcon;
+              const gradientColors = template.gradient_colors || { color1: '#3b82f6', color2: '#06b6d4' };
+              const gradientStyle = `linear-gradient(to right, ${gradientColors.color1}, ${gradientColors.color2})`;
+              const bgGradientStyle = `linear-gradient(to bottom right, ${gradientColors.color1}20, ${gradientColors.color2}20)`;
+              
+              return (
+                <div
+                  key={template.id}
+                  className="border-2 rounded-xl p-6 transform transition-all duration-300 hover:scale-105 hover:shadow-lg"
+                  style={{ 
+                    background: bgGradientStyle,
+                    borderColor: gradientColors.color1 + '40'
+                  }}
+                >
+                  <div className="flex items-center mb-4">
+                    <div 
+                      className="w-12 h-12 rounded-xl flex items-center justify-center shadow-lg mr-3"
+                      style={{ background: gradientStyle }}
+                    >
+                      <IconComponent className="h-6 w-6 text-white" />
+                    </div>
+                    <h3 className="text-xl font-bold text-gray-900">{template.name}</h3>
+                  </div>
+                  {template.description && (
+                    <p className="text-gray-600 mb-2">{template.description}</p>
+                  )}
+                  <p className="text-gray-600 mb-4">
+                    {template.cpu_cores} CPU core{template.cpu_cores !== 1 ? 's' : ''}, {template.ram_gb}GB RAM, {template.disk_gb}GB Disk
+                  </p>
+                  <div className="mb-4">
+                    <p 
+                      className="text-3xl font-bold bg-clip-text text-transparent"
+                      style={{ backgroundImage: gradientStyle }}
+                    >
+                      {template.price} coins
+                    </p>
+                  </div>
+                  <button 
+                    className="w-full px-4 py-3 text-white rounded-xl hover:shadow-xl transform transition-all duration-200 hover:scale-105 font-semibold"
+                    style={{ background: gradientStyle }}
+                    onClick={() => {
+                      // TODO: Implement template deployment
+                      console.log('Deploy template:', template);
+                    }}
+                  >
+                    Deploy Now
+                  </button>
+                </div>
+              );
+            })}
           </div>
-        </div>
+        ) : (
+          <div className="text-center py-12 text-gray-500">
+            No server templates available at the moment.
+          </div>
+        )}
       </div>
     </div>
   );

@@ -3,6 +3,7 @@ const { body, param } = require('express-validator');
 const { authenticate } = require('../middleware/auth.middleware');
 const { validate } = require('../middleware/validation.middleware');
 const Server = require('../models/Server');
+const Settings = require('../models/Settings');
 const pterodactylService = require('../services/pterodactyl.service');
 const coinService = require('../services/coin.service');
 const pterodactylConfig = require('../config/pterodactyl');
@@ -43,45 +44,81 @@ router.get('/:id',
 );
 
 // Helper function to calculate server creation cost
-function calculateServerCost(cpuLimit, memoryLimit, diskLimit) {
-  // Get pricing from resource pricing endpoint logic
-  // CPU: 100 coins per core (assuming 1 core = 100%)
-  // Memory: 200 coins per GB
-  // Disk: 50 coins per GB
-  const cpuCost = Math.ceil(cpuLimit / 100) * 100; // Assuming 100% = 1 core
-  const memoryCost = Math.ceil(memoryLimit / 1024) * 200; // Convert MB to GB
-  const diskCost = Math.ceil(diskLimit / 1024) * 50; // Convert MB to GB
-  
-  // Base creation fee
-  const baseFee = 500;
-  
-  return cpuCost + memoryCost + diskCost + baseFee;
+async function calculateServerCost(cpuLimit, memoryLimit, diskLimit) {
+  try {
+    // Get pricing from Settings
+    const pricing = await Settings.getResourcePricing();
+    
+    // CPU: per_core coins per core (assuming 1 core = 100%)
+    const cpuCost = Math.ceil(cpuLimit / 100) * pricing.cpu.per_core;
+    
+    // Memory: per_gb coins per GB (convert MB to GB)
+    const memoryCost = Math.ceil(memoryLimit / 1024) * pricing.memory.per_gb;
+    
+    // Disk: per_gb coins per GB (convert MB to GB)
+    const diskCost = Math.ceil(diskLimit / 1024) * pricing.disk.per_gb;
+    
+    // Base creation fee
+    const baseFee = 500;
+    
+    return cpuCost + memoryCost + diskCost + baseFee;
+  } catch (error) {
+    console.error('Error calculating server cost:', error);
+    // Fallback to default pricing
+    const cpuCost = Math.ceil(cpuLimit / 100) * 100;
+    const memoryCost = Math.ceil(memoryLimit / 1024) * 200;
+    const diskCost = Math.ceil(diskLimit / 1024) * 50;
+    const baseFee = 500;
+    return cpuCost + memoryCost + diskCost + baseFee;
+  }
 }
 
 // Helper function to calculate resource upgrade cost
-function calculateResourceUpgradeCost(oldResources, newResources) {
-  let cost = 0;
-  
-  // Calculate CPU upgrade cost
-  if (newResources.cpu_limit > oldResources.cpu_limit) {
-    const cpuDiff = newResources.cpu_limit - oldResources.cpu_limit;
-    cost += Math.ceil(cpuDiff / 100) * 100; // 100 coins per core
+async function calculateResourceUpgradeCost(oldResources, newResources) {
+  try {
+    // Get pricing from Settings
+    const pricing = await Settings.getResourcePricing();
+    
+    let cost = 0;
+    
+    // Calculate CPU upgrade cost
+    if (newResources.cpu_limit > oldResources.cpu_limit) {
+      const cpuDiff = newResources.cpu_limit - oldResources.cpu_limit;
+      cost += Math.ceil(cpuDiff / 100) * pricing.cpu.per_core;
+    }
+    
+    // Calculate memory upgrade cost
+    if (newResources.memory_limit > oldResources.memory_limit) {
+      const memoryDiff = newResources.memory_limit - oldResources.memory_limit;
+      cost += Math.ceil(memoryDiff / 1024) * pricing.memory.per_gb;
+    }
+    
+    // Calculate disk upgrade cost
+    if (newResources.disk_limit > oldResources.disk_limit) {
+      const diskDiff = newResources.disk_limit - oldResources.disk_limit;
+      cost += Math.ceil(diskDiff / 1024) * pricing.disk.per_gb;
+    }
+    
+    // Downgrades are free (no refund, just allow)
+    return cost;
+  } catch (error) {
+    console.error('Error calculating resource upgrade cost:', error);
+    // Fallback to default pricing
+    let cost = 0;
+    if (newResources.cpu_limit > oldResources.cpu_limit) {
+      const cpuDiff = newResources.cpu_limit - oldResources.cpu_limit;
+      cost += Math.ceil(cpuDiff / 100) * 100;
+    }
+    if (newResources.memory_limit > oldResources.memory_limit) {
+      const memoryDiff = newResources.memory_limit - oldResources.memory_limit;
+      cost += Math.ceil(memoryDiff / 1024) * 200;
+    }
+    if (newResources.disk_limit > oldResources.disk_limit) {
+      const diskDiff = newResources.disk_limit - oldResources.disk_limit;
+      cost += Math.ceil(diskDiff / 1024) * 50;
+    }
+    return cost;
   }
-  
-  // Calculate memory upgrade cost
-  if (newResources.memory_limit > oldResources.memory_limit) {
-    const memoryDiff = newResources.memory_limit - oldResources.memory_limit;
-    cost += Math.ceil(memoryDiff / 1024) * 200; // 200 coins per GB
-  }
-  
-  // Calculate disk upgrade cost
-  if (newResources.disk_limit > oldResources.disk_limit) {
-    const diskDiff = newResources.disk_limit - oldResources.disk_limit;
-    cost += Math.ceil(diskDiff / 1024) * 50; // 50 coins per GB
-  }
-  
-  // Downgrades are free (no refund, just allow)
-  return cost;
 }
 
 // Create server
@@ -111,7 +148,7 @@ router.post(
       }
       
       // Calculate server creation cost
-      const cost = calculateServerCost(cpu_limit, memory_limit, disk_limit);
+      const cost = await calculateServerCost(cpu_limit, memory_limit, disk_limit);
       
       // Check user balance
       const balance = await coinService.getBalance(req.user.id);
@@ -242,7 +279,7 @@ router.put(
       };
 
       // Calculate upgrade cost
-      const cost = calculateResourceUpgradeCost(
+      const cost = await calculateResourceUpgradeCost(
         {
           cpu_limit: server.cpu_limit,
           memory_limit: server.memory_limit,

@@ -20,7 +20,8 @@ import {
   ExclamationTriangleIcon,
   CheckCircleIcon,
   InformationCircleIcon,
-  SparklesIcon
+  SparklesIcon,
+  PlusIcon
 } from '@heroicons/react/24/outline';
 
 const Admin = () => {
@@ -660,6 +661,7 @@ const Admin = () => {
     { id: 'servers', name: 'Servers', icon: ServerIcon },
     { id: 'transactions', name: 'Transactions', icon: CurrencyDollarIcon },
     { id: 'revenue', name: 'Revenue', icon: ArrowTrendingUpIcon },
+    { id: 'store', name: 'Store Management', icon: CurrencyDollarIcon },
   ];
 
   return (
@@ -2112,6 +2114,11 @@ const Admin = () => {
               ) : null}
             </div>
           )}
+
+          {/* Store Management Tab */}
+          {activeTab === 'store' && (
+            <StoreManagementSection />
+          )}
             </div>
           </div>
         </>
@@ -2345,6 +2352,618 @@ const Admin = () => {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+// Store Management Section Component
+const StoreManagementSection = () => {
+  const queryClient = useQueryClient();
+  
+  // Resource Pricing State
+  const [pricing, setPricing] = useState({
+    cpu: { per_core: 100, per_hour: 5 },
+    memory: { per_gb: 200, per_hour: 10 },
+    disk: { per_gb: 50, per_hour: 2 },
+  });
+
+  // Templates State
+  const [templateFormOpen, setTemplateFormOpen] = useState(false);
+  const [editingTemplate, setEditingTemplate] = useState(null);
+  const [templateFormData, setTemplateFormData] = useState({
+    name: '',
+    description: '',
+    cpu_cores: 2,
+    ram_gb: 2,
+    disk_gb: 10,
+    price: 500,
+    game_type: 'minecraft',
+    enabled: true,
+    icon: 'ServerIcon',
+    gradient_colors: { color1: '#3b82f6', color2: '#06b6d4' },
+    display_order: 0,
+  });
+
+  // Fetch resource pricing
+  const { data: pricingData, isLoading: pricingDataLoading } = useQuery(
+    'storePricing',
+    async () => {
+      const res = await api.get('/admin/store/pricing');
+      return res.data;
+    },
+    {
+      onSuccess: (data) => {
+        setPricing(data);
+      },
+    }
+  );
+
+  // Fetch templates
+  const { data: templatesData, isLoading: templatesDataLoading } = useQuery(
+    'storeTemplates',
+    async () => {
+      const res = await api.get('/admin/store/templates');
+      return res.data;
+    }
+  );
+
+  // Update pricing mutation
+  const updatePricingMutation = useMutation(
+    async (newPricing) => {
+      const res = await api.put('/admin/store/pricing', newPricing);
+      return res.data;
+    },
+    {
+      onSuccess: () => {
+        toast.success('Resource pricing updated successfully');
+        queryClient.invalidateQueries('storePricing');
+        queryClient.invalidateQueries('pricing');
+      },
+      onError: (error) => {
+        toast.error(error.response?.data?.error || 'Failed to update pricing');
+      },
+    }
+  );
+
+  // Template mutations
+  const createTemplateMutation = useMutation(
+    async (templateData) => {
+      const res = await api.post('/admin/store/templates', templateData);
+      return res.data;
+    },
+    {
+      onSuccess: () => {
+        toast.success('Template created successfully');
+        queryClient.invalidateQueries('storeTemplates');
+        queryClient.invalidateQueries('templates');
+        setTemplateFormOpen(false);
+        resetTemplateForm();
+      },
+      onError: (error) => {
+        toast.error(error.response?.data?.error || 'Failed to create template');
+      },
+    }
+  );
+
+  const updateTemplateMutation = useMutation(
+    async ({ id, data }) => {
+      const res = await api.put(`/admin/store/templates/${id}`, data);
+      return res.data;
+    },
+    {
+      onSuccess: () => {
+        toast.success('Template updated successfully');
+        queryClient.invalidateQueries('storeTemplates');
+        queryClient.invalidateQueries('templates');
+        setTemplateFormOpen(false);
+        setEditingTemplate(null);
+        resetTemplateForm();
+      },
+      onError: (error) => {
+        toast.error(error.response?.data?.error || 'Failed to update template');
+      },
+    }
+  );
+
+  const deleteTemplateMutation = useMutation(
+    async (id) => {
+      const res = await api.delete(`/admin/store/templates/${id}`);
+      return res.data;
+    },
+    {
+      onSuccess: () => {
+        toast.success('Template deleted successfully');
+        queryClient.invalidateQueries('storeTemplates');
+        queryClient.invalidateQueries('templates');
+      },
+      onError: (error) => {
+        toast.error(error.response?.data?.error || 'Failed to delete template');
+      },
+    }
+  );
+
+  const toggleTemplateEnabledMutation = useMutation(
+    async ({ id, enabled }) => {
+      const res = await api.put(`/admin/store/templates/${id}`, { enabled });
+      return res.data;
+    },
+    {
+      onSuccess: () => {
+        queryClient.invalidateQueries('storeTemplates');
+        queryClient.invalidateQueries('templates');
+      },
+      onError: (error) => {
+        toast.error(error.response?.data?.error || 'Failed to update template');
+      },
+    }
+  );
+
+  const reorderTemplatesMutation = useMutation(
+    async (reorderData) => {
+      const res = await api.put('/admin/store/templates/reorder', { templates: reorderData });
+      return res.data;
+    },
+    {
+      onSuccess: () => {
+        queryClient.invalidateQueries('storeTemplates');
+        queryClient.invalidateQueries('templates');
+      },
+      onError: (error) => {
+        toast.error(error.response?.data?.error || 'Failed to reorder templates');
+      },
+    }
+  );
+
+  const resetTemplateForm = () => {
+    setTemplateFormData({
+      name: '',
+      description: '',
+      cpu_cores: 2,
+      ram_gb: 2,
+      disk_gb: 10,
+      price: 500,
+      game_type: 'minecraft',
+      enabled: true,
+      icon: 'ServerIcon',
+      gradient_colors: { color1: '#3b82f6', color2: '#06b6d4' },
+      display_order: 0,
+    });
+  };
+
+  const handleEditTemplate = (template) => {
+    setEditingTemplate(template);
+    setTemplateFormData({
+      name: template.name,
+      description: template.description || '',
+      cpu_cores: template.cpu_cores,
+      ram_gb: template.ram_gb,
+      disk_gb: template.disk_gb,
+      price: template.price,
+      game_type: template.game_type,
+      enabled: template.enabled,
+      icon: template.icon,
+      gradient_colors: template.gradient_colors,
+      display_order: template.display_order,
+    });
+    setTemplateFormOpen(true);
+  };
+
+  const handleDeleteTemplate = (id) => {
+    if (window.confirm('Are you sure you want to delete this template?')) {
+      deleteTemplateMutation.mutate(id);
+    }
+  };
+
+  const handleMoveTemplate = (index, direction) => {
+    if (!templatesData) return;
+    const newTemplates = [...templatesData];
+    const newIndex = direction === 'up' ? index - 1 : index + 1;
+    
+    if (newIndex < 0 || newIndex >= newTemplates.length) return;
+    
+    [newTemplates[index], newTemplates[newIndex]] = [newTemplates[newIndex], newTemplates[index]];
+    
+    const reorderData = newTemplates.map((t, i) => ({
+      id: t.id,
+      display_order: i,
+    }));
+    
+    reorderTemplatesMutation.mutate(reorderData);
+  };
+
+  const handleSavePricing = () => {
+    updatePricingMutation.mutate(pricing);
+  };
+
+  const handleSaveTemplate = () => {
+    if (editingTemplate) {
+      updateTemplateMutation.mutate({ id: editingTemplate.id, data: templateFormData });
+    } else {
+      createTemplateMutation.mutate(templateFormData);
+    }
+  };
+
+  // Allowed icons list (from iconValidator)
+  const allowedIcons = [
+    'ServerIcon', 'CpuChipIcon', 'CircleStackIcon', 'CubeIcon', 'SparklesIcon',
+    'CurrencyDollarIcon', 'ChartBarIcon', 'Cog6ToothIcon', 'ShieldCheckIcon',
+  ];
+
+  return (
+    <div className="space-y-6">
+      {/* Resource Pricing Section */}
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+        <h2 className="text-xl font-semibold mb-4 text-gray-800">Resource Pricing</h2>
+        
+        {pricingDataLoading ? (
+          <div className="flex justify-center py-8">
+            <ArrowPathIcon className="h-6 w-6 animate-spin text-indigo-600" />
+          </div>
+        ) : (
+          <div className="space-y-6">
+            {/* CPU Pricing */}
+            <div className="border border-gray-200 rounded-lg p-4">
+              <h3 className="font-medium text-gray-700 mb-3">CPU Pricing</h3>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm text-gray-600 mb-1">Per Core (coins)</label>
+                  <input
+                    type="number"
+                    min="0.01"
+                    max="10000"
+                    step="0.01"
+                    value={pricing.cpu.per_core}
+                    onChange={(e) => setPricing({ ...pricing, cpu: { ...pricing.cpu, per_core: parseFloat(e.target.value) || 0 } })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm text-gray-600 mb-1">Per Hour (coins)</label>
+                  <input
+                    type="number"
+                    min="0.01"
+                    max="1000"
+                    step="0.01"
+                    value={pricing.cpu.per_hour}
+                    onChange={(e) => setPricing({ ...pricing, cpu: { ...pricing.cpu, per_hour: parseFloat(e.target.value) || 0 } })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Memory Pricing */}
+            <div className="border border-gray-200 rounded-lg p-4">
+              <h3 className="font-medium text-gray-700 mb-3">Memory (RAM) Pricing</h3>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm text-gray-600 mb-1">Per GB (coins)</label>
+                  <input
+                    type="number"
+                    min="0.01"
+                    max="10000"
+                    step="0.01"
+                    value={pricing.memory.per_gb}
+                    onChange={(e) => setPricing({ ...pricing, memory: { ...pricing.memory, per_gb: parseFloat(e.target.value) || 0 } })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm text-gray-600 mb-1">Per Hour (coins)</label>
+                  <input
+                    type="number"
+                    min="0.01"
+                    max="1000"
+                    step="0.01"
+                    value={pricing.memory.per_hour}
+                    onChange={(e) => setPricing({ ...pricing, memory: { ...pricing.memory, per_hour: parseFloat(e.target.value) || 0 } })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Disk Pricing */}
+            <div className="border border-gray-200 rounded-lg p-4">
+              <h3 className="font-medium text-gray-700 mb-3">Disk Space Pricing</h3>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm text-gray-600 mb-1">Per GB (coins)</label>
+                  <input
+                    type="number"
+                    min="0.01"
+                    max="10000"
+                    step="0.01"
+                    value={pricing.disk.per_gb}
+                    onChange={(e) => setPricing({ ...pricing, disk: { ...pricing.disk, per_gb: parseFloat(e.target.value) || 0 } })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm text-gray-600 mb-1">Per Hour (coins)</label>
+                  <input
+                    type="number"
+                    min="0.01"
+                    max="1000"
+                    step="0.01"
+                    value={pricing.disk.per_hour}
+                    onChange={(e) => setPricing({ ...pricing, disk: { ...pricing.disk, per_hour: parseFloat(e.target.value) || 0 } })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <button
+              onClick={handleSavePricing}
+              disabled={updatePricingMutation.isLoading}
+              className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50"
+            >
+              {updatePricingMutation.isLoading ? 'Saving...' : 'Save Pricing'}
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* Server Templates Section */}
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+        <div className="flex justify-between items-center mb-4">
+          <h2 className="text-xl font-semibold text-gray-800">Server Templates</h2>
+          <button
+            onClick={() => {
+              resetTemplateForm();
+              setEditingTemplate(null);
+              setTemplateFormOpen(true);
+            }}
+            className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700"
+          >
+            <PlusIcon className="h-5 w-5 inline mr-1" />
+            Add Template
+          </button>
+        </div>
+
+        {templatesDataLoading ? (
+          <div className="flex justify-center py-8">
+            <ArrowPathIcon className="h-6 w-6 animate-spin text-indigo-600" />
+          </div>
+        ) : !templatesData || templatesData.length === 0 ? (
+          <div className="text-center py-8 text-gray-500">No templates found. Create your first template!</div>
+        ) : (
+          <div className="space-y-3">
+            {templatesData.map((template, index) => (
+              <div
+                key={template.id}
+                className="border border-gray-200 rounded-lg p-4 flex items-center justify-between hover:bg-gray-50"
+              >
+                <div className="flex-1">
+                  <div className="flex items-center space-x-3">
+                    <div className="flex space-x-2">
+                      <button
+                        onClick={() => handleMoveTemplate(index, 'up')}
+                        disabled={index === 0}
+                        className="text-gray-400 hover:text-gray-600 disabled:opacity-30"
+                      >
+                        ↑
+                      </button>
+                      <button
+                        onClick={() => handleMoveTemplate(index, 'down')}
+                        disabled={index === templatesData.length - 1}
+                        className="text-gray-400 hover:text-gray-600 disabled:opacity-30"
+                      >
+                        ↓
+                      </button>
+                    </div>
+                    <div>
+                      <h3 className="font-medium text-gray-900">{template.name}</h3>
+                      <p className="text-sm text-gray-500">
+                        {template.cpu_cores} CPU • {template.ram_gb}GB RAM • {template.disk_gb}GB Disk • {template.price} coins • {template.game_type}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <label className="flex items-center">
+                    <input
+                      type="checkbox"
+                      checked={template.enabled}
+                      onChange={(e) => toggleTemplateEnabledMutation.mutate({ id: template.id, enabled: e.target.checked })}
+                      className="mr-2"
+                    />
+                    <span className="text-sm text-gray-600">Enabled</span>
+                  </label>
+                  <button
+                    onClick={() => handleEditTemplate(template)}
+                    className="p-2 text-indigo-600 hover:bg-indigo-50 rounded"
+                  >
+                    <PencilIcon className="h-5 w-5" />
+                  </button>
+                  <button
+                    onClick={() => handleDeleteTemplate(template.id)}
+                    className="p-2 text-red-600 hover:bg-red-50 rounded"
+                  >
+                    <TrashIcon className="h-5 w-5" />
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Template Form Modal */}
+      {templateFormOpen && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-xl font-semibold">{editingTemplate ? 'Edit Template' : 'Create Template'}</h2>
+              <button onClick={() => { setTemplateFormOpen(false); setEditingTemplate(null); resetTemplateForm(); }} className="text-gray-400 hover:text-gray-600">
+                <XMarkIcon className="h-6 w-6" />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Name *</label>
+                  <input
+                    type="text"
+                    maxLength={100}
+                    value={templateFormData.name}
+                    onChange={(e) => setTemplateFormData({ ...templateFormData, name: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Game Type *</label>
+                  <select
+                    value={templateFormData.game_type}
+                    onChange={(e) => setTemplateFormData({ ...templateFormData, game_type: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                  >
+                    <option value="minecraft">Minecraft</option>
+                    <option value="fivem">FiveM</option>
+                    <option value="other">Other</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
+                <textarea
+                  maxLength={500}
+                  value={templateFormData.description}
+                  onChange={(e) => setTemplateFormData({ ...templateFormData, description: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                  rows={3}
+                />
+              </div>
+
+              <div className="grid grid-cols-3 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">CPU Cores *</label>
+                  <input
+                    type="number"
+                    min="1"
+                    max="100"
+                    value={templateFormData.cpu_cores}
+                    onChange={(e) => setTemplateFormData({ ...templateFormData, cpu_cores: parseInt(e.target.value) || 1 })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">RAM (GB) *</label>
+                  <input
+                    type="number"
+                    min="1"
+                    max="1000"
+                    value={templateFormData.ram_gb}
+                    onChange={(e) => setTemplateFormData({ ...templateFormData, ram_gb: parseInt(e.target.value) || 1 })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Disk (GB) *</label>
+                  <input
+                    type="number"
+                    min="1"
+                    max="10000"
+                    value={templateFormData.disk_gb}
+                    onChange={(e) => setTemplateFormData({ ...templateFormData, disk_gb: parseInt(e.target.value) || 1 })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                    required
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Price (coins) *</label>
+                  <input
+                    type="number"
+                    min="0.01"
+                    max="1000000"
+                    step="0.01"
+                    value={templateFormData.price}
+                    onChange={(e) => setTemplateFormData({ ...templateFormData, price: parseFloat(e.target.value) || 0.01 })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Icon *</label>
+                  <select
+                    value={templateFormData.icon}
+                    onChange={(e) => setTemplateFormData({ ...templateFormData, icon: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                  >
+                    {allowedIcons.map((icon) => (
+                      <option key={icon} value={icon}>
+                        {icon}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Gradient Color 1 *</label>
+                  <input
+                    type="color"
+                    value={templateFormData.gradient_colors.color1}
+                    onChange={(e) => setTemplateFormData({
+                      ...templateFormData,
+                      gradient_colors: { ...templateFormData.gradient_colors, color1: e.target.value }
+                    })}
+                    className="w-full h-10 border border-gray-300 rounded-lg"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Gradient Color 2 *</label>
+                  <input
+                    type="color"
+                    value={templateFormData.gradient_colors.color2}
+                    onChange={(e) => setTemplateFormData({
+                      ...templateFormData,
+                      gradient_colors: { ...templateFormData.gradient_colors, color2: e.target.value }
+                    })}
+                    className="w-full h-10 border border-gray-300 rounded-lg"
+                  />
+                </div>
+              </div>
+
+              <div className="flex items-center">
+                <input
+                  type="checkbox"
+                  checked={templateFormData.enabled}
+                  onChange={(e) => setTemplateFormData({ ...templateFormData, enabled: e.target.checked })}
+                  className="mr-2"
+                />
+                <label className="text-sm text-gray-700">Enabled</label>
+              </div>
+
+              <div className="flex justify-end space-x-3">
+                <button
+                  onClick={() => { setTemplateFormOpen(false); setEditingTemplate(null); resetTemplateForm(); }}
+                  className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleSaveTemplate}
+                  disabled={createTemplateMutation.isLoading || updateTemplateMutation.isLoading}
+                  className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50"
+                >
+                  {createTemplateMutation.isLoading || updateTemplateMutation.isLoading ? 'Saving...' : 'Save'}
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}

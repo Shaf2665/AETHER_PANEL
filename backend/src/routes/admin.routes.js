@@ -6,11 +6,15 @@ const User = require('../models/User');
 const Server = require('../models/Server');
 const Transaction = require('../models/Transaction');
 const Settings = require('../models/Settings');
+const ServerTemplate = require('../models/ServerTemplate');
 const coinService = require('../services/coin.service');
 const pterodactylConfig = require('../config/pterodactyl');
 const pool = require('../config/database');
 const updateService = require('../services/update.service');
 const { updateRateLimit } = require('../middleware/updateRateLimit.middleware');
+const { storeRateLimit } = require('../middleware/storeRateLimit.middleware');
+const { validateIcon, getAllowedIcons } = require('../utils/iconValidator');
+const { validateGradientColors } = require('../utils/colorValidator');
 
 const router = express.Router();
 

@@ -62,6 +62,26 @@ async function migrate() {
       console.warn('⚠️  Branding settings migration file not found, skipping...');
     }
     
+    // Run server templates migration
+    const serverTemplatesPath = path.join(__dirname, 'migrate-server-templates.sql');
+    if (fs.existsSync(serverTemplatesPath)) {
+      const serverTemplates = fs.readFileSync(serverTemplatesPath, 'utf8');
+      await pool.query(serverTemplates);
+      console.log('✅ Server templates table migration completed');
+    } else {
+      console.warn('⚠️  Server templates migration file not found, skipping...');
+    }
+    
+    // Run resource pricing migration
+    const resourcePricingPath = path.join(__dirname, 'migrate-resource-pricing.sql');
+    if (fs.existsSync(resourcePricingPath)) {
+      const resourcePricing = fs.readFileSync(resourcePricingPath, 'utf8');
+      await pool.query(resourcePricing);
+      console.log('✅ Resource pricing settings migration completed');
+    } else {
+      console.warn('⚠️  Resource pricing migration file not found, skipping...');
+    }
+    
     console.log('✅ Database migration completed successfully');
     process.exit(0);
   } catch (error) {

@@ -1,5 +1,7 @@
 const express = require('express');
 const { authenticate } = require('../middleware/auth.middleware');
+const Settings = require('../models/Settings');
+const ServerTemplate = require('../models/ServerTemplate');
 
 const router = express.Router();
 
@@ -7,21 +9,29 @@ const router = express.Router();
 router.use(authenticate);
 
 // Get resource pricing
-router.get('/pricing', (req, res) => {
-  res.json({
-    cpu: {
-      per_core: 100,
-      per_hour: 5,
-    },
-    memory: {
-      per_gb: 200,
-      per_hour: 10,
-    },
-    disk: {
-      per_gb: 50,
-      per_hour: 2,
-    },
-  });
+router.get('/pricing', async (req, res, next) => {
+  try {
+    const pricing = await Settings.getResourcePricing();
+    res.json(pricing);
+  } catch (error) {
+    console.error('Error fetching resource pricing:', error);
+    // Return defaults on error
+    res.json({
+      cpu: { per_core: 100, per_hour: 5 },
+      memory: { per_gb: 200, per_hour: 10 },
+      disk: { per_gb: 50, per_hour: 2 },
+    });
+  }
+});
+
+// Get enabled server templates (public store endpoint)
+router.get('/templates', async (req, res, next) => {
+  try {
+    const templates = await ServerTemplate.findAll(true); // enabledOnly = true
+    res.json(templates);
+  } catch (error) {
+    next(error);
+  }
 });
 
 // Purchase resources (placeholder)

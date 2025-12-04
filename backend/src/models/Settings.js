@@ -264,6 +264,91 @@ class Settings {
       throw error;
     }
   }
+
+  /**
+   * Get resource pricing configuration from settings
+   * @returns {Promise<Object>} Resource pricing configuration object
+   */
+  static async getResourcePricing() {
+    try {
+      const settings = await this.getAll();
+      return {
+        cpu: {
+          per_core: parseFloat(settings.resource_pricing_cpu_per_core || '100'),
+          per_hour: parseFloat(settings.resource_pricing_cpu_per_hour || '5'),
+        },
+        memory: {
+          per_gb: parseFloat(settings.resource_pricing_memory_per_gb || '200'),
+          per_hour: parseFloat(settings.resource_pricing_memory_per_hour || '10'),
+        },
+        disk: {
+          per_gb: parseFloat(settings.resource_pricing_disk_per_gb || '50'),
+          per_hour: parseFloat(settings.resource_pricing_disk_per_hour || '2'),
+        },
+      };
+    } catch (error) {
+      console.error('Error getting resource pricing config:', error);
+      // Return defaults on error
+      return {
+        cpu: { per_core: 100, per_hour: 5 },
+        memory: { per_gb: 200, per_hour: 10 },
+        disk: { per_gb: 50, per_hour: 2 },
+      };
+    }
+  }
+
+  /**
+   * Set resource pricing configuration
+   * @param {Object} pricing - Resource pricing configuration object
+   * @returns {Promise<void>}
+   */
+  static async setResourcePricing(pricing) {
+    try {
+      // Validate config structure
+      if (!pricing || typeof pricing !== 'object') {
+        throw new Error('Resource pricing config must be an object');
+      }
+
+      // Validate and set CPU pricing
+      if (pricing.cpu) {
+        if (pricing.cpu.per_core !== undefined) {
+          const perCore = Math.max(0.01, Math.min(10000, parseFloat(pricing.cpu.per_core) || 100));
+          await this.set('resource_pricing_cpu_per_core', String(perCore));
+        }
+        if (pricing.cpu.per_hour !== undefined) {
+          const perHour = Math.max(0.01, Math.min(1000, parseFloat(pricing.cpu.per_hour) || 5));
+          await this.set('resource_pricing_cpu_per_hour', String(perHour));
+        }
+      }
+
+      // Validate and set Memory pricing
+      if (pricing.memory) {
+        if (pricing.memory.per_gb !== undefined) {
+          const perGb = Math.max(0.01, Math.min(10000, parseFloat(pricing.memory.per_gb) || 200));
+          await this.set('resource_pricing_memory_per_gb', String(perGb));
+        }
+        if (pricing.memory.per_hour !== undefined) {
+          const perHour = Math.max(0.01, Math.min(1000, parseFloat(pricing.memory.per_hour) || 10));
+          await this.set('resource_pricing_memory_per_hour', String(perHour));
+        }
+      }
+
+      // Validate and set Disk pricing
+      if (pricing.disk) {
+        if (pricing.disk.per_gb !== undefined) {
+          const perGb = Math.max(0.01, Math.min(10000, parseFloat(pricing.disk.per_gb) || 50));
+          await this.set('resource_pricing_disk_per_gb', String(perGb));
+        }
+        if (pricing.disk.per_hour !== undefined) {
+          const perHour = Math.max(0.01, Math.min(1000, parseFloat(pricing.disk.per_hour) || 2));
+          await this.set('resource_pricing_disk_per_hour', String(perHour));
+        }
+      }
+    } catch (error) {
+      console.error('Error setting resource pricing config:', error);
+      throw error;
+    }
+  }
 }
 
 module.exports = Settings;
