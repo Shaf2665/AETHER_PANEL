@@ -80,7 +80,11 @@ const Dashboard = () => {
     },
     {
       name: 'Account Age',
-      value: user ? Math.floor((Date.now() - new Date(user.createdAt).getTime()) / (1000 * 60 * 60 * 24)) : 0,
+      value: user?.createdAt ? (() => {
+        const createdAt = new Date(user.createdAt).getTime();
+        const daysDiff = Math.floor((Date.now() - createdAt) / (1000 * 60 * 60 * 24));
+        return isNaN(daysDiff) ? 0 : daysDiff;
+      })() : 0,
       icon: ClockIcon,
       gradient: 'from-amber-500 to-orange-600',
       bgGradient: 'from-amber-50 to-orange-50',
