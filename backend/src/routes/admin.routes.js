@@ -406,6 +406,89 @@ router.get('/settings/pterodactyl', async (req, res, next) => {
   }
 });
 
+// Test Pterodactyl connection and fetch options
+router.post('/settings/pterodactyl/test', [
+  body('url').isURL().withMessage('Invalid URL'),
+  body('applicationApiKey').isString().notEmpty().withMessage('Application API key is required'),
+  validate
+], async (req, res, next) => {
+  try {
+    const pterodactylService = require('../services/pterodactyl.service');
+    const { url, applicationApiKey } = req.body;
+
+    // Test connection
+    const testResult = await pterodactylService.testConnection(url, applicationApiKey);
+    if (!testResult.success) {
+      return res.status(400).json({ error: testResult.message });
+    }
+
+    // Fetch options
+    const options = await pterodactylService.fetchOptions(url, applicationApiKey);
+
+    // Format response - handle both Pterodactyl API formats (with data wrapper or direct array)
+    const formatNodes = (nodesData) => {
+      if (!nodesData) return [];
+      const nodes = Array.isArray(nodesData) ? nodesData : (nodesData.data || []);
+      return nodes.map(node => ({
+        id: node.attributes?.id || node.id,
+        name: node.attributes?.name || node.name || `Node ${node.attributes?.id || node.id}`,
+      })).filter(node => node.id); // Filter out invalid entries
+    };
+
+    const formatNests = (nestsData) => {
+      if (!nestsData) return [];
+      const nests = Array.isArray(nestsData) ? nestsData : (nestsData.data || []);
+      return nests.map(nest => ({
+        id: nest.attributes?.id || nest.id,
+        name: nest.attributes?.name || nest.name || `Nest ${nest.attributes?.id || nest.id}`,
+        description: nest.attributes?.description || nest.description || '',
+      })).filter(nest => nest.id); // Filter out invalid entries
+    };
+
+    const formatEggs = (eggsData) => {
+      if (!eggsData) return [];
+      const eggs = Array.isArray(eggsData) ? eggsData : (eggsData.data || []);
+      return eggs.map(egg => ({
+        id: egg.attributes?.id || egg.id,
+        name: egg.attributes?.name || egg.name || `Egg ${egg.attributes?.id || egg.id}`,
+        nestId: egg.attributes?.nest || egg.nest || null,
+      })).filter(egg => egg.id); // Filter out invalid entries
+    };
+
+    const formatUsers = (usersData) => {
+      if (!usersData) return [];
+      const users = Array.isArray(usersData) ? usersData : (usersData.data || []);
+      return users.map(user => ({
+        id: user.attributes?.id || user.id,
+        username: user.attributes?.username || user.username || `User ${user.attributes?.id || user.id}`,
+        email: user.attributes?.email || user.email || '',
+      })).filter(user => user.id); // Filter out invalid entries
+    };
+
+    const formattedOptions = {
+      nodes: formatNodes(options.nodes),
+      nests: formatNests(options.nests),
+      users: formatUsers(options.users),
+      eggsByNest: {},
+    };
+
+    // Format eggs by nest
+    Object.keys(options.eggsByNest).forEach(nestId => {
+      formattedOptions.eggsByNest[nestId] = formatEggs(options.eggsByNest[nestId]);
+    });
+
+    res.json({
+      success: true,
+      message: 'Connection successful',
+      options: formattedOptions,
+      errors: options.errors,
+    });
+  } catch (error) {
+    console.error('Error testing Pterodactyl connection:', error);
+    res.status(500).json({ error: error.message || 'Failed to test connection' });
+  }
+});
+
 // Update Pterodactyl settings
 router.put('/settings/pterodactyl', [
   body('url').optional().isURL().withMessage('Invalid URL'),

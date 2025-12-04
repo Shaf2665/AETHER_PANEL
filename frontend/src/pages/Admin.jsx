@@ -52,6 +52,14 @@ const Admin = () => {
     eggIdOther: 1,
     defaultUserId: 1,
   });
+  const [pterodactylOptions, setPterodactylOptions] = useState({
+    nodes: [],
+    nests: [],
+    users: [],
+    eggsByNest: {},
+  });
+  const [pterodactylTestLoading, setPterodactylTestLoading] = useState(false);
+  const [pterodactylTestError, setPterodactylTestError] = useState(null);
   const [linkvertiseSettings, setLinkvertiseSettings] = useState({
     enabled: false,
     apiKey: '',
@@ -270,6 +278,45 @@ const Admin = () => {
     }
   );
 
+  // Test Pterodactyl connection and fetch options mutation
+  const testPterodactylMutation = useMutation(
+    async ({ url, applicationApiKey }) => {
+      const res = await api.post('/admin/settings/pterodactyl/test', {
+        url,
+        applicationApiKey,
+      });
+      return res.data;
+    },
+    {
+      onSuccess: (data) => {
+        if (data.success) {
+          toast.success('Connection successful! Options loaded.');
+          setPterodactylOptions(data.options);
+          setPterodactylTestError(null);
+          
+          // Auto-select first option if only one exists
+          if (data.options.nodes.length === 1) {
+            setPterodactylSettings(prev => ({ ...prev, nodeId: data.options.nodes[0].id }));
+          }
+          if (data.options.nests.length === 1) {
+            setPterodactylSettings(prev => ({ ...prev, nestId: data.options.nests[0].id }));
+          }
+          if (data.options.users.length === 1) {
+            setPterodactylSettings(prev => ({ ...prev, defaultUserId: data.options.users[0].id }));
+          }
+        } else {
+          toast.error(data.message || 'Connection failed');
+          setPterodactylTestError(data.message || 'Connection failed');
+        }
+      },
+      onError: (error) => {
+        const errorMessage = error.response?.data?.error || 'Failed to test connection';
+        toast.error(errorMessage);
+        setPterodactylTestError(errorMessage);
+      },
+    }
+  );
+
   // Update Pterodactyl settings mutation
   const updatePterodactylMutation = useMutation(
     async (data) => {
@@ -286,6 +333,27 @@ const Admin = () => {
       },
     }
   );
+
+  const handleTestConnection = async () => {
+    if (!pterodactylSettings.url || !pterodactylSettings.applicationApiKey) {
+      toast.error('Please enter Panel URL and Application API Key first');
+      return;
+    }
+
+    setPterodactylTestLoading(true);
+    setPterodactylTestError(null);
+    testPterodactylMutation.mutate(
+      {
+        url: pterodactylSettings.url,
+        applicationApiKey: pterodactylSettings.applicationApiKey,
+      },
+      {
+        onSettled: () => {
+          setPterodactylTestLoading(false);
+        },
+      }
+    );
+  };
 
   const handlePterodactylSubmit = (e) => {
     e.preventDefault();
@@ -694,6 +762,12 @@ const Admin = () => {
                 </p>
 
                 <form onSubmit={handlePterodactylSubmit} className="bg-white rounded-lg border border-gray-200 p-6 space-y-6">
+                  {/* Connection Section */}
+                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+                    <h3 className="text-sm font-semibold text-blue-900 mb-2">Step 1: Enter Connection Details</h3>
+                    <p className="text-xs text-blue-700 mb-4">Enter your Pterodactyl Panel URL and Application API Key, then click "Test Connection & Fetch Options" to automatically load all available options.</p>
+                  </div>
+
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div className="md:col-span-2">
                       <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
@@ -747,6 +821,45 @@ const Admin = () => {
                       <p className="mt-1 text-sm text-gray-500">Application API key from Pterodactyl</p>
                     </div>
 
+                    <div className="md:col-span-2 flex items-center gap-3">
+                      <button
+                        type="button"
+                        onClick={handleTestConnection}
+                        disabled={pterodactylTestLoading || !pterodactylSettings.url || !pterodactylSettings.applicationApiKey}
+                        className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                      >
+                        {pterodactylTestLoading ? (
+                          <>
+                            <ArrowPathIcon className="h-4 w-4 animate-spin" />
+                            <span>Testing...</span>
+                          </>
+                        ) : (
+                          <>
+                            <CheckCircleIcon className="h-4 w-4" />
+                            <span>Test Connection & Fetch Options</span>
+                          </>
+                        )}
+                      </button>
+                      {pterodactylTestError && (
+                        <div className="flex items-center gap-2 text-red-600 text-sm">
+                          <ExclamationTriangleIcon className="h-4 w-4" />
+                          <span>{pterodactylTestError}</span>
+                        </div>
+                      )}
+                      {pterodactylOptions.nodes.length > 0 && (
+                        <div className="flex items-center gap-2 text-green-600 text-sm">
+                          <CheckCircleIcon className="h-4 w-4" />
+                          <span>Options loaded successfully</span>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Configuration Section */}
+                    <div className="md:col-span-2 mt-4 pt-6 border-t border-gray-200">
+                      <h3 className="text-sm font-semibold text-gray-800 mb-4">Step 2: Configure Server Defaults</h3>
+                      <p className="text-xs text-gray-600 mb-4">Select default values for server creation. These can be changed when creating individual servers.</p>
+                    </div>
+
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
                         Client API Key
@@ -797,6 +910,12 @@ const Admin = () => {
                       <p className="mt-1 text-sm text-gray-500">Legacy API key (optional)</p>
                     </div>
 
+                    {/* Configuration Section */}
+                    <div className="md:col-span-2 mt-4 pt-6 border-t border-gray-200">
+                      <h3 className="text-sm font-semibold text-gray-800 mb-2">Step 2: Configure Server Defaults</h3>
+                      <p className="text-xs text-gray-600">Select default values for server creation. These can be changed when creating individual servers.</p>
+                    </div>
+
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
                         Default Node ID
@@ -812,14 +931,33 @@ const Admin = () => {
                           </div>
                         </div>
                       </label>
-                      <input
-                        type="number"
-                        min="1"
-                        value={pterodactylSettings.nodeId}
-                        onChange={(e) => setPterodactylSettings({ ...pterodactylSettings, nodeId: parseInt(e.target.value) || 1 })}
-                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                        required
-                      />
+                      {pterodactylOptions.nodes.length > 0 ? (
+                        <select
+                          value={pterodactylSettings.nodeId}
+                          onChange={(e) => setPterodactylSettings({ ...pterodactylSettings, nodeId: parseInt(e.target.value) || 1 })}
+                          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                          required
+                        >
+                          {pterodactylOptions.nodes.map((node) => (
+                            <option key={node.id} value={node.id}>
+                              {node.name} (ID: {node.id})
+                            </option>
+                          ))}
+                        </select>
+                      ) : (
+                        <input
+                          type="number"
+                          min="1"
+                          value={pterodactylSettings.nodeId}
+                          onChange={(e) => setPterodactylSettings({ ...pterodactylSettings, nodeId: parseInt(e.target.value) || 1 })}
+                          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                          placeholder="Enter Node ID manually"
+                          required
+                        />
+                      )}
+                      {pterodactylOptions.nodes.length === 0 && (
+                        <p className="mt-1 text-xs text-gray-500">Click "Test Connection & Fetch Options" to load available nodes</p>
+                      )}
                     </div>
 
                     <div>
@@ -837,14 +975,36 @@ const Admin = () => {
                           </div>
                         </div>
                       </label>
-                      <input
-                        type="number"
-                        min="1"
-                        value={pterodactylSettings.nestId}
-                        onChange={(e) => setPterodactylSettings({ ...pterodactylSettings, nestId: parseInt(e.target.value) || 1 })}
-                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                        required
-                      />
+                      {pterodactylOptions.nests.length > 0 ? (
+                        <select
+                          value={pterodactylSettings.nestId}
+                          onChange={(e) => {
+                            const newNestId = parseInt(e.target.value) || 1;
+                            setPterodactylSettings({ ...pterodactylSettings, nestId: newNestId });
+                          }}
+                          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                          required
+                        >
+                          {pterodactylOptions.nests.map((nest) => (
+                            <option key={nest.id} value={nest.id}>
+                              {nest.name} (ID: {nest.id})
+                            </option>
+                          ))}
+                        </select>
+                      ) : (
+                        <input
+                          type="number"
+                          min="1"
+                          value={pterodactylSettings.nestId}
+                          onChange={(e) => setPterodactylSettings({ ...pterodactylSettings, nestId: parseInt(e.target.value) || 1 })}
+                          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                          placeholder="Enter Nest ID manually"
+                          required
+                        />
+                      )}
+                      {pterodactylOptions.nests.length === 0 && (
+                        <p className="mt-1 text-xs text-gray-500">Click "Test Connection & Fetch Options" to load available nests</p>
+                      )}
                     </div>
 
                     <div>
@@ -862,14 +1022,35 @@ const Admin = () => {
                           </div>
                         </div>
                       </label>
-                      <input
-                        type="number"
-                        min="1"
-                        value={pterodactylSettings.eggIdMinecraft}
-                        onChange={(e) => setPterodactylSettings({ ...pterodactylSettings, eggIdMinecraft: parseInt(e.target.value) || 1 })}
-                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                        required
-                      />
+                      {Object.keys(pterodactylOptions.eggsByNest).length > 0 ? (
+                        <select
+                          value={pterodactylSettings.eggIdMinecraft}
+                          onChange={(e) => setPterodactylSettings({ ...pterodactylSettings, eggIdMinecraft: parseInt(e.target.value) || 1 })}
+                          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                          required
+                        >
+                          {Object.entries(pterodactylOptions.eggsByNest).flatMap(([nestId, eggs]) =>
+                            eggs.map((egg) => (
+                              <option key={`${nestId}-${egg.id}`} value={egg.id}>
+                                {egg.name} (ID: {egg.id})
+                              </option>
+                            ))
+                          )}
+                        </select>
+                      ) : (
+                        <input
+                          type="number"
+                          min="1"
+                          value={pterodactylSettings.eggIdMinecraft}
+                          onChange={(e) => setPterodactylSettings({ ...pterodactylSettings, eggIdMinecraft: parseInt(e.target.value) || 1 })}
+                          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                          placeholder="Enter Egg ID manually"
+                          required
+                        />
+                      )}
+                      {Object.keys(pterodactylOptions.eggsByNest).length === 0 && (
+                        <p className="mt-1 text-xs text-gray-500">Click "Test Connection & Fetch Options" to load available eggs</p>
+                      )}
                     </div>
 
                     <div>
@@ -887,14 +1068,35 @@ const Admin = () => {
                           </div>
                         </div>
                       </label>
-                      <input
-                        type="number"
-                        min="1"
-                        value={pterodactylSettings.eggIdFivem}
-                        onChange={(e) => setPterodactylSettings({ ...pterodactylSettings, eggIdFivem: parseInt(e.target.value) || 2 })}
-                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                        required
-                      />
+                      {Object.keys(pterodactylOptions.eggsByNest).length > 0 ? (
+                        <select
+                          value={pterodactylSettings.eggIdFivem}
+                          onChange={(e) => setPterodactylSettings({ ...pterodactylSettings, eggIdFivem: parseInt(e.target.value) || 2 })}
+                          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                          required
+                        >
+                          {Object.entries(pterodactylOptions.eggsByNest).flatMap(([nestId, eggs]) =>
+                            eggs.map((egg) => (
+                              <option key={`${nestId}-${egg.id}`} value={egg.id}>
+                                {egg.name} (ID: {egg.id})
+                              </option>
+                            ))
+                          )}
+                        </select>
+                      ) : (
+                        <input
+                          type="number"
+                          min="1"
+                          value={pterodactylSettings.eggIdFivem}
+                          onChange={(e) => setPterodactylSettings({ ...pterodactylSettings, eggIdFivem: parseInt(e.target.value) || 2 })}
+                          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                          placeholder="Enter Egg ID manually"
+                          required
+                        />
+                      )}
+                      {Object.keys(pterodactylOptions.eggsByNest).length === 0 && (
+                        <p className="mt-1 text-xs text-gray-500">Click "Test Connection & Fetch Options" to load available eggs</p>
+                      )}
                     </div>
 
                     <div>
@@ -912,14 +1114,35 @@ const Admin = () => {
                           </div>
                         </div>
                       </label>
-                      <input
-                        type="number"
-                        min="1"
-                        value={pterodactylSettings.eggIdOther}
-                        onChange={(e) => setPterodactylSettings({ ...pterodactylSettings, eggIdOther: parseInt(e.target.value) || 1 })}
-                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                        required
-                      />
+                      {Object.keys(pterodactylOptions.eggsByNest).length > 0 ? (
+                        <select
+                          value={pterodactylSettings.eggIdOther}
+                          onChange={(e) => setPterodactylSettings({ ...pterodactylSettings, eggIdOther: parseInt(e.target.value) || 1 })}
+                          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                          required
+                        >
+                          {Object.entries(pterodactylOptions.eggsByNest).flatMap(([nestId, eggs]) =>
+                            eggs.map((egg) => (
+                              <option key={`${nestId}-${egg.id}`} value={egg.id}>
+                                {egg.name} (ID: {egg.id})
+                              </option>
+                            ))
+                          )}
+                        </select>
+                      ) : (
+                        <input
+                          type="number"
+                          min="1"
+                          value={pterodactylSettings.eggIdOther}
+                          onChange={(e) => setPterodactylSettings({ ...pterodactylSettings, eggIdOther: parseInt(e.target.value) || 1 })}
+                          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                          placeholder="Enter Egg ID manually"
+                          required
+                        />
+                      )}
+                      {Object.keys(pterodactylOptions.eggsByNest).length === 0 && (
+                        <p className="mt-1 text-xs text-gray-500">Click "Test Connection & Fetch Options" to load available eggs</p>
+                      )}
                     </div>
 
                     <div>
@@ -937,15 +1160,35 @@ const Admin = () => {
                           </div>
                         </div>
                       </label>
-                      <input
-                        type="number"
-                        min="1"
-                        value={pterodactylSettings.defaultUserId}
-                        onChange={(e) => setPterodactylSettings({ ...pterodactylSettings, defaultUserId: parseInt(e.target.value) || 1 })}
-                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                        required
-                      />
-                      <p className="mt-1 text-sm text-gray-500">Pterodactyl user ID for server ownership</p>
+                      {pterodactylOptions.users.length > 0 ? (
+                        <select
+                          value={pterodactylSettings.defaultUserId}
+                          onChange={(e) => setPterodactylSettings({ ...pterodactylSettings, defaultUserId: parseInt(e.target.value) || 1 })}
+                          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                          required
+                        >
+                          {pterodactylOptions.users.map((user) => (
+                            <option key={user.id} value={user.id}>
+                              {user.username} {user.email ? `(${user.email})` : ''} (ID: {user.id})
+                            </option>
+                          ))}
+                        </select>
+                      ) : (
+                        <input
+                          type="number"
+                          min="1"
+                          value={pterodactylSettings.defaultUserId}
+                          onChange={(e) => setPterodactylSettings({ ...pterodactylSettings, defaultUserId: parseInt(e.target.value) || 1 })}
+                          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                          placeholder="Enter User ID manually"
+                          required
+                        />
+                      )}
+                      {pterodactylOptions.users.length === 0 ? (
+                        <p className="mt-1 text-xs text-gray-500">Click "Test Connection & Fetch Options" to load available users</p>
+                      ) : (
+                        <p className="mt-1 text-sm text-gray-500">Pterodactyl user ID for server ownership</p>
+                      )}
                     </div>
                   </div>
 
