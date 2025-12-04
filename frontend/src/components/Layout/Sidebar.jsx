@@ -89,9 +89,7 @@ const Sidebar = () => {
             <p className="text-xs" style={{ color: 'var(--theme-text-secondary)' }}>
               {branding?.dashboardShortName 
                 ? 'Dashboard' 
-                : (branding?.dashboardName && branding.dashboardName.split(' ').length > 1
-                    ? branding.dashboardName.split(' ').slice(1).join(' ')
-                    : 'Dashboard')}
+                : (branding?.dashboardName?.split(' ').slice(1).join(' ') || 'Dashboard')}
             </p>
           </div>
         </div>

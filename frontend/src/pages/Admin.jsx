@@ -61,7 +61,7 @@ const Admin = () => {
   const [settingsLoading, setSettingsLoading] = useState(false);
   const [linkvertiseLoading, setLinkvertiseLoading] = useState(false);
   const [updateModalOpen, setUpdateModalOpen] = useState(false);
-  const { theme, previewTheme, updateTheme } = useTheme();
+  const { theme, previewTheme, updateTheme, loadBranding } = useTheme();
   const [brandingSettings, setBrandingSettings] = useState({
     dashboardName: 'Aether Dashboard',
     dashboardShortName: 'Aether',
@@ -396,10 +396,10 @@ const Admin = () => {
         toast.success('Branding settings updated successfully');
         setBrandingSettings(data.config);
         queryClient.invalidateQueries('brandingSettings');
-        // Reload page to apply branding changes
-        setTimeout(() => {
-          window.location.reload();
-        }, 1000);
+        // Refresh branding context to apply changes without page reload
+        if (loadBranding) {
+          loadBranding();
+        }
       },
       onError: (error) => {
         toast.error(error.response?.data?.error || 'Failed to update branding settings');

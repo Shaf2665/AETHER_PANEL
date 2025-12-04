@@ -574,23 +574,27 @@ router.put(
       
       // Validate logo URLs if provided (must be data URLs or valid URLs)
       if (updates.sidebarLogoUrl !== undefined && updates.sidebarLogoUrl !== '') {
-        const isValidDataUrl = updates.sidebarLogoUrl.startsWith('data:image/');
+        // Stricter data URL validation: data:image/(jpeg|jpg|png|gif|webp|svg+xml);base64,...
+        const isValidDataUrl = /^data:image\/(jpeg|jpg|png|gif|webp|svg\+xml);base64,[A-Za-z0-9+/=]+$/.test(updates.sidebarLogoUrl);
+        // Valid HTTP(S) URL validation
         const isValidUrl = /^https?:\/\/.+/.test(updates.sidebarLogoUrl);
         if (!isValidDataUrl && !isValidUrl) {
           return res.status(400).json({
             error: 'Invalid sidebar logo URL',
-            message: 'Logo URL must be a valid data URL (data:image/...) or HTTP(S) URL'
+            message: 'Logo URL must be a valid data URL (data:image/jpeg;base64,...) or HTTP(S) URL'
           });
         }
       }
       
       if (updates.mainLogoUrl !== undefined && updates.mainLogoUrl !== '') {
-        const isValidDataUrl = updates.mainLogoUrl.startsWith('data:image/');
+        // Stricter data URL validation: data:image/(jpeg|jpg|png|gif|webp|svg+xml);base64,...
+        const isValidDataUrl = /^data:image\/(jpeg|jpg|png|gif|webp|svg\+xml);base64,[A-Za-z0-9+/=]+$/.test(updates.mainLogoUrl);
+        // Valid HTTP(S) URL validation
         const isValidUrl = /^https?:\/\/.+/.test(updates.mainLogoUrl);
         if (!isValidDataUrl && !isValidUrl) {
           return res.status(400).json({
             error: 'Invalid main logo URL',
-            message: 'Logo URL must be a valid data URL (data:image/...) or HTTP(S) URL'
+            message: 'Logo URL must be a valid data URL (data:image/jpeg;base64,...) or HTTP(S) URL'
           });
         }
       }
@@ -614,7 +618,7 @@ router.put(
 // Get update status
 router.get('/system/update/status', async (req, res, next) => {
   try {
-    const status = updateService.getStatus();
+    const status = await updateService.getStatus();
     res.json(status);
   } catch (error) {
     next(error);
@@ -643,7 +647,7 @@ router.post('/system/update', updateRateLimit, async (req, res, next) => {
     }
 
     // Check if update already in progress
-    const status = updateService.getStatus();
+    const status = await updateService.getStatus();
     if (status.isUpdating) {
       return res.status(409).json({
         error: 'Update already in progress',

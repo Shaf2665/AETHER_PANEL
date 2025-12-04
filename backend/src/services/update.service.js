@@ -555,12 +555,25 @@ class UpdateService {
   /**
    * Get update status
    */
-  getStatus() {
-    return {
-      isUpdating: this.isUpdating,
-      logs: this.updateLogs,
-      canUpdate: process.env.ENABLE_SYSTEM_UPDATE === 'true'
-    };
+  async getStatus() {
+    try {
+      const latestAudit = await UpdateAudit.findLatest();
+      return {
+        isUpdating: this.isUpdating,
+        latestAudit: latestAudit || null,
+        currentLogs: this.isUpdating ? this.updateLogs : [],
+        canUpdate: process.env.ENABLE_SYSTEM_UPDATE === 'true'
+      };
+    } catch (error) {
+      console.error('Error fetching update status:', error);
+      // Return status without audit data if database query fails
+      return {
+        isUpdating: this.isUpdating,
+        latestAudit: null,
+        currentLogs: this.isUpdating ? this.updateLogs : [],
+        canUpdate: process.env.ENABLE_SYSTEM_UPDATE === 'true'
+      };
+    }
   }
 }
 

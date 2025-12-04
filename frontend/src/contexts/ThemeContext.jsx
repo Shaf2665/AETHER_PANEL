@@ -243,9 +243,16 @@ export const ThemeProvider = ({ children }) => {
   }, [getDefaultBranding]);
 
   // Load theme and branding on mount
+  // Load theme first, then branding to ensure proper initialization order
   useEffect(() => {
-    loadTheme();
-    loadBranding();
+    const initializeThemeAndBranding = async () => {
+      // Load theme first as it's more critical for initial render
+      await loadTheme();
+      // Then load branding after theme is loaded
+      await loadBranding();
+    };
+    
+    initializeThemeAndBranding();
   }, [loadTheme, loadBranding]);
 
   const value = {
