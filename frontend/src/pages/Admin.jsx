@@ -696,8 +696,19 @@ const Admin = () => {
                 <form onSubmit={handlePterodactylSubmit} className="bg-white rounded-lg border border-gray-200 p-6 space-y-6">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div className="md:col-span-2">
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                      <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
                         Pterodactyl Panel URL
+                        <div className="group relative inline-flex">
+                          <InformationCircleIcon className="h-4 w-4 text-gray-400 hover:text-gray-600 cursor-help" aria-label="Information about Pterodactyl Panel URL" />
+                          <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 hidden group-hover:block z-50">
+                            <div className="bg-gray-900 text-white text-xs rounded-lg py-2 px-3 shadow-lg max-w-xs">
+                              Enter the full URL of your Pterodactyl Panel (e.g., https://panel.yourdomain.com). This is where your Pterodactyl installation is hosted.
+                              <div className="absolute top-full left-1/2 transform -translate-x-1/2 -mt-1">
+                                <div className="border-4 border-transparent border-t-gray-900"></div>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
                       </label>
                       <input
                         type="url"
@@ -711,8 +722,19 @@ const Admin = () => {
                     </div>
 
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                      <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
                         Application API Key
+                        <div className="group relative inline-flex">
+                          <InformationCircleIcon className="h-4 w-4 text-gray-400 hover:text-gray-600 cursor-help" aria-label="Information about Application API Key" />
+                          <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 hidden group-hover:block z-50">
+                            <div className="bg-gray-900 text-white text-xs rounded-lg py-2 px-3 shadow-lg max-w-xs">
+                              Get this from your Pterodactyl Panel: Settings → API Credentials → Application API. This key is required for server creation and management.
+                              <div className="absolute top-full left-1/2 transform -translate-x-1/2 -mt-1">
+                                <div className="border-4 border-transparent border-t-gray-900"></div>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
                       </label>
                       <input
                         type="password"
@@ -726,8 +748,19 @@ const Admin = () => {
                     </div>
 
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                      <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
                         Client API Key
+                        <div className="group relative inline-flex">
+                          <InformationCircleIcon className="h-4 w-4 text-gray-400 hover:text-gray-600 cursor-help" aria-label="Information about Client API Key" />
+                          <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 hidden group-hover:block z-50">
+                            <div className="bg-gray-900 text-white text-xs rounded-lg py-2 px-3 shadow-lg max-w-xs">
+                              Optional. Get this from your Pterodactyl Panel: Settings → API Credentials → Client API. Used for checking server status and resource usage.
+                              <div className="absolute top-full left-1/2 transform -translate-x-1/2 -mt-1">
+                                <div className="border-4 border-transparent border-t-gray-900"></div>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
                       </label>
                       <input
                         type="password"
@@ -740,8 +773,19 @@ const Admin = () => {
                     </div>
 
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                      <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
                         API Key (Legacy)
+                        <div className="group relative inline-flex">
+                          <InformationCircleIcon className="h-4 w-4 text-gray-400 hover:text-gray-600 cursor-help" aria-label="Information about Legacy API Key" />
+                          <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 hidden group-hover:block z-50">
+                            <div className="bg-gray-900 text-white text-xs rounded-lg py-2 px-3 shadow-lg max-w-xs">
+                              Optional. Legacy API key format. Only needed if you're using an older Pterodactyl version.
+                              <div className="absolute top-full left-1/2 transform -translate-x-1/2 -mt-1">
+                                <div className="border-4 border-transparent border-t-gray-900"></div>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
                       </label>
                       <input
                         type="password"
@@ -754,8 +798,19 @@ const Admin = () => {
                     </div>
 
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                      <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
                         Default Node ID
+                        <div className="group relative inline-flex">
+                          <InformationCircleIcon className="h-4 w-4 text-gray-400 hover:text-gray-600 cursor-help" aria-label="Information about Default Node ID" />
+                          <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 hidden group-hover:block z-50">
+                            <div className="bg-gray-900 text-white text-xs rounded-lg py-2 px-3 shadow-lg max-w-xs">
+                              The ID of the Pterodactyl node where servers will be created. Find this in your Pterodactyl Panel under Locations → Nodes.
+                              <div className="absolute top-full left-1/2 transform -translate-x-1/2 -mt-1">
+                                <div className="border-4 border-transparent border-t-gray-900"></div>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
                       </label>
                       <input
                         type="number"
@@ -768,8 +823,19 @@ const Admin = () => {
                     </div>
 
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                      <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
                         Default Nest ID
+                        <div className="group relative inline-flex">
+                          <InformationCircleIcon className="h-4 w-4 text-gray-400 hover:text-gray-600 cursor-help" aria-label="Information about Default Nest ID" />
+                          <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 hidden group-hover:block z-50">
+                            <div className="bg-gray-900 text-white text-xs rounded-lg py-2 px-3 shadow-lg max-w-xs">
+                              The ID of the Pterodactyl nest (game type collection). Find this in your Pterodactyl Panel under Nests.
+                              <div className="absolute top-full left-1/2 transform -translate-x-1/2 -mt-1">
+                                <div className="border-4 border-transparent border-t-gray-900"></div>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
                       </label>
                       <input
                         type="number"
@@ -782,8 +848,19 @@ const Admin = () => {
                     </div>
 
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                      <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
                         Minecraft Egg ID
+                        <div className="group relative inline-flex">
+                          <InformationCircleIcon className="h-4 w-4 text-gray-400 hover:text-gray-600 cursor-help" aria-label="Information about Minecraft Egg ID" />
+                          <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 hidden group-hover:block z-50">
+                            <div className="bg-gray-900 text-white text-xs rounded-lg py-2 px-3 shadow-lg max-w-xs">
+                              The specific egg ID for Minecraft servers. Find this in your Pterodactyl Panel under Nests → Minecraft → Eggs.
+                              <div className="absolute top-full left-1/2 transform -translate-x-1/2 -mt-1">
+                                <div className="border-4 border-transparent border-t-gray-900"></div>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
                       </label>
                       <input
                         type="number"
@@ -796,8 +873,19 @@ const Admin = () => {
                     </div>
 
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                      <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
                         FiveM Egg ID
+                        <div className="group relative inline-flex">
+                          <InformationCircleIcon className="h-4 w-4 text-gray-400 hover:text-gray-600 cursor-help" aria-label="Information about FiveM Egg ID" />
+                          <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 hidden group-hover:block z-50">
+                            <div className="bg-gray-900 text-white text-xs rounded-lg py-2 px-3 shadow-lg max-w-xs">
+                              The specific egg ID for FiveM servers. Find this in your Pterodactyl Panel under Nests → FiveM → Eggs.
+                              <div className="absolute top-full left-1/2 transform -translate-x-1/2 -mt-1">
+                                <div className="border-4 border-transparent border-t-gray-900"></div>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
                       </label>
                       <input
                         type="number"
@@ -810,8 +898,19 @@ const Admin = () => {
                     </div>
 
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                      <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
                         Other Game Egg ID
+                        <div className="group relative inline-flex">
+                          <InformationCircleIcon className="h-4 w-4 text-gray-400 hover:text-gray-600 cursor-help" aria-label="Information about Other Game Egg ID" />
+                          <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 hidden group-hover:block z-50">
+                            <div className="bg-gray-900 text-white text-xs rounded-lg py-2 px-3 shadow-lg max-w-xs">
+                              The egg ID for other game types. Find this in your Pterodactyl Panel under Nests → [Game Type] → Eggs.
+                              <div className="absolute top-full left-1/2 transform -translate-x-1/2 -mt-1">
+                                <div className="border-4 border-transparent border-t-gray-900"></div>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
                       </label>
                       <input
                         type="number"
@@ -824,8 +923,19 @@ const Admin = () => {
                     </div>
 
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                      <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
                         Default User ID
+                        <div className="group relative inline-flex">
+                          <InformationCircleIcon className="h-4 w-4 text-gray-400 hover:text-gray-600 cursor-help" aria-label="Information about Default User ID" />
+                          <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 hidden group-hover:block z-50">
+                            <div className="bg-gray-900 text-white text-xs rounded-lg py-2 px-3 shadow-lg max-w-xs">
+                              The Pterodactyl user ID that will own created servers. This is usually 1 for the first admin user, or find it in Users section of your Pterodactyl Panel.
+                              <div className="absolute top-full left-1/2 transform -translate-x-1/2 -mt-1">
+                                <div className="border-4 border-transparent border-t-gray-900"></div>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
                       </label>
                       <input
                         type="number"
