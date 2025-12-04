@@ -85,6 +85,17 @@ class PterodactylService {
       environment,
     } = config;
 
+    // Validate required fields
+    if (!eggId || isNaN(eggId)) {
+      throw new Error(`Invalid egg_id: ${eggId}. Egg ID must be a positive integer.`);
+    }
+    if (!nestId || isNaN(nestId)) {
+      throw new Error(`Invalid nest_id: ${nestId}. Nest ID must be a positive integer.`);
+    }
+    if (!nodeId || isNaN(nodeId)) {
+      throw new Error(`Invalid node_id: ${nodeId}. Node ID must be a positive integer.`);
+    }
+
     const serverData = {
       name,
       user: userId,
@@ -104,12 +115,20 @@ class PterodactylService {
       allocation: {
         default: 1,
       },
-      nest_id: nestId,
-      egg_id: eggId,
+      nest_id: parseInt(nestId, 10),
+      egg_id: parseInt(eggId, 10),
       docker_image: dockerImage || 'ghcr.io/pterodactyl/games:latest',
       startup,
       environment: environment || {},
     };
+
+    console.log('Creating Pterodactyl server with data:', {
+      name,
+      userId,
+      nest_id: serverData.nest_id,
+      egg_id: serverData.egg_id,
+      nodeId: nodeId
+    });
 
     return await this.makeRequest('POST', '/application/servers', serverData);
   }

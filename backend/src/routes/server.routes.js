@@ -175,8 +175,13 @@ router.post(
       await client.query('BEGIN');
       
       try {
-        // Refresh config to get latest custom games
-        await pterodactylConfig.refresh();
+        // Refresh config to get latest custom games and use the returned config directly
+        const config = await pterodactylConfig.refresh();
+        
+        // Validate config is loaded
+        if (!config) {
+          throw new Error('Failed to load Pterodactyl configuration. Please check your settings in Admin Panel > Settings > Pterodactyl Configuration.');
+        }
         
         // Get Pterodactyl user ID
         // Note: In production, you should create/sync users in Pterodactyl when they register
@@ -189,12 +194,23 @@ router.post(
         
         if (game_type === 'minecraft') {
           // Minecraft uses default nest ID and Minecraft egg ID
-          nestId = pterodactylConfig.defaultNestId;
-          eggId = pterodactylConfig.gameTypeEggs.minecraft;
+          nestId = config.defaultNestId;
+          eggId = config.gameTypeEggs?.minecraft;
+          
+          // Validate eggId is set
+          if (!eggId || isNaN(eggId)) {
+            console.error('Minecraft egg ID is missing or invalid:', {
+              gameTypeEggs: config.gameTypeEggs,
+              eggId,
+              config
+            });
+            throw new Error('Minecraft Egg ID is not configured. Please set it in Admin Panel > Settings > Pterodactyl Configuration.');
+          }
+          
           startup = 'java -Xms128M -Xmx{{SERVER_MEMORY}}M -jar {{SERVER_JARFILE}}';
         } else {
           // Find custom game
-          const customGames = pterodactylConfig.customGames || [];
+          const customGames = config.customGames || [];
           const customGame = customGames.find(g => g.name.toLowerCase() === game_type.toLowerCase());
           
           if (!customGame) {
@@ -203,8 +219,36 @@ router.post(
           
           nestId = customGame.nestId;
           eggId = customGame.eggId;
+          
+          // Validate custom game eggId
+          if (!eggId || isNaN(eggId)) {
+            console.error('Custom game egg ID is missing or invalid:', {
+              customGame,
+              game_type,
+              eggId
+            });
+            throw new Error(`Egg ID for custom game '${game_type}' is not configured. Please check your Pterodactyl Configuration.`);
+          }
+          
           startup = ''; // Custom games may have their own startup commands
         }
+        
+        // Final validation before API call
+        if (!nestId || isNaN(nestId)) {
+          throw new Error(`Nest ID is missing or invalid for game type '${game_type}'. Please check your Pterodactyl Configuration.`);
+        }
+        
+        if (!eggId || isNaN(eggId)) {
+          throw new Error(`Egg ID is missing or invalid for game type '${game_type}'. Please check your Pterodactyl Configuration.`);
+        }
+        
+        console.log('Server creation config:', {
+          game_type,
+          nestId,
+          eggId,
+          nodeId: config.defaultNodeId,
+          userId: pterodactylUserId
+        });
         
         // Create server in Pterodactyl
         const pterodactylServer = await pterodactylService.createServer({
@@ -216,7 +260,7 @@ router.post(
           disk: disk_limit,
           io: 500,
           swap: 0,
-          nodeId: pterodactylConfig.defaultNodeId,
+          nodeId: config.defaultNodeId,
           nestId: nestId,
           eggId: eggId,
           dockerImage: 'ghcr.io/pterodactyl/games:latest',

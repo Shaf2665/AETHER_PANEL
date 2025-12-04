@@ -21,6 +21,16 @@ async function getConfig() {
     const Settings = require('../models/Settings');
     const dbConfig = await Settings.getPterodactylConfig();
     
+    // Ensure eggIds.minecraft is properly parsed as integer
+    const minecraftEggId = dbConfig.eggIds?.minecraft 
+      ? parseInt(dbConfig.eggIds.minecraft, 10)
+      : parseInt(process.env.PTERODACTYL_EGG_ID_MINECRAFT || process.env.PTERODACTYL_EGG_ID || '1', 10);
+    
+    // Validate minecraftEggId
+    if (isNaN(minecraftEggId) || minecraftEggId < 1) {
+      console.warn('Invalid Minecraft Egg ID, using default:', minecraftEggId);
+    }
+    
     cachedConfig = {
       baseUrl: dbConfig.url || process.env.PTERODACTYL_URL || 'https://panel.example.com',
       apiKey: dbConfig.apiKey || process.env.PTERODACTYL_API_KEY || '',
@@ -29,10 +39,19 @@ async function getConfig() {
       defaultNodeId: dbConfig.nodeId || parseInt(process.env.PTERODACTYL_NODE_ID || '1', 10),
       defaultNestId: dbConfig.nestId || parseInt(process.env.PTERODACTYL_NEST_ID || '1', 10),
       gameTypeEggs: {
-        minecraft: dbConfig.eggIds.minecraft || parseInt(process.env.PTERODACTYL_EGG_ID_MINECRAFT || process.env.PTERODACTYL_EGG_ID || '1', 10),
+        minecraft: minecraftEggId,
       },
       customGames: dbConfig.customGames || [],
     };
+    
+    console.log('Pterodactyl config loaded:', {
+      baseUrl: cachedConfig.baseUrl,
+      defaultNodeId: cachedConfig.defaultNodeId,
+      defaultNestId: cachedConfig.defaultNestId,
+      minecraftEggId: cachedConfig.gameTypeEggs.minecraft,
+      customGamesCount: cachedConfig.customGames.length
+    });
+    
     lastCacheTime = now;
   } catch (error) {
     console.warn('Failed to load settings from database, using env vars:', error.message);
