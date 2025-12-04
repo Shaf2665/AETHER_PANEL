@@ -87,28 +87,13 @@ const getClientIP = (req) => {
   return req.ip;
 };
 
-const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 60, // limit each IP to 60 requests per windowMs (reduced from 100)
-  message: 'Too many requests, please try again later.',
-  standardHeaders: true,
-  legacyHeaders: false,
-  // Explicitly acknowledge trust proxy setting to prevent ValidationError
-  trustProxy: isProduction,
-  // Custom key generator for better IP detection behind proxy
-  keyGenerator: (req) => getClientIP(req),
-});
+// Rate limiting is only applied to critical endpoints:
+// 1. Authentication endpoints (brute force protection)
+// 2. Revenue endpoints (coin farming prevention)
+// 3. Store management (admin abuse prevention)
+// General API routes rely on Cloudflare DDoS protection and authentication
 
-// Apply general limiter to API routes, but skip auth routes (they have their own limiter)
-app.use('/api/', (req, res, next) => {
-  // Skip general limiter for auth routes (they have their own stricter limiter)
-  if (req.path.startsWith('/auth')) {
-    return next();
-  }
-  limiter(req, res, next);
-});
-
-// Stricter rate limiting for authentication endpoints
+// Rate limiting for authentication endpoints (brute force protection)
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: 20, // 20 attempts per 15 minutes (increased to prevent blocking legitimate logins)
