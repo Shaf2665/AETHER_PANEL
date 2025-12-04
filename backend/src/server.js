@@ -105,23 +105,8 @@ const authLimiter = rateLimit({
   keyGenerator: (req) => getClientIP(req),
 });
 
-// Stricter rate limiting for revenue endpoints (prevent coin farming)
-const revenueLimiter = rateLimit({
-  windowMs: 60 * 1000, // 1 minute
-  max: 10, // 10 requests per minute
-  message: 'Too many requests to revenue endpoints, please slow down.',
-  standardHeaders: true,
-  legacyHeaders: false,
-  // Explicitly acknowledge trust proxy setting
-  trustProxy: isProduction,
-  keyGenerator: (req) => {
-    if (isProduction && req.headers['x-forwarded-for']) {
-      const forwarded = req.headers['x-forwarded-for'].split(',')[0].trim();
-      return forwarded || req.ip;
-    }
-    return req.ip;
-  },
-});
+// Note: Revenue endpoints and store management have their own rate limiters
+// defined in their respective route files (revenue.routes.js, storeRateLimit.middleware.js)
 
 // Body parsing middleware with size limits
 app.use(express.json({ limit: '10mb' }));
