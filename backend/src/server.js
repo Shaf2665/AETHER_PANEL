@@ -29,10 +29,10 @@ const PORT = process.env.PORT || 5000;
 const isProduction = process.env.NODE_ENV === 'production';
 
 // Trust proxy configuration (required for reverse proxies like Cloudflare/nginx)
-// In production: trust all proxies (Cloudflare + nginx)
+// In production: trust 2 proxies (Cloudflare + nginx)
 // In development: trust first proxy only
 if (isProduction) {
-  app.set('trust proxy', true); // Trust all proxies in production
+  app.set('trust proxy', 2); // Trust 2 proxies in production (Cloudflare + nginx)
   console.log('✅ Trust proxy enabled for production (Cloudflare/nginx support)');
 } else {
   app.set('trust proxy', 1); // Trust first proxy only in development
