@@ -192,8 +192,14 @@ router.put('/users/:id', [
 ], async (req, res, next) => {
   try {
     const user = await User.update(req.params.id, req.body);
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
     res.json(user);
   } catch (error) {
+    if (error.message === 'User not found') {
+      return res.status(404).json({ error: error.message });
+    }
     next(error);
   }
 });

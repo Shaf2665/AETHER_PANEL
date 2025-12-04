@@ -93,6 +93,11 @@ class User {
       RETURNING *
     `;
     const result = await pool.query(query, [discordUsername, discordAvatar, userId]);
+    
+    if (!result.rows || result.rows.length === 0) {
+      throw new Error('User not found');
+    }
+    
     return result.rows[0];
   }
 
@@ -108,6 +113,11 @@ class User {
       RETURNING coins, total_earned_coins
     `;
     const result = await pool.query(query, [amount, userId]);
+    
+    if (!result.rows || result.rows.length === 0) {
+      throw new Error('User not found');
+    }
+    
     return result.rows[0];
   }
 
@@ -169,6 +179,11 @@ class User {
     }
     const query = 'UPDATE users SET role = $1 WHERE id = $2 RETURNING id, username, email, role';
     const result = await pool.query(query, [role, userId]);
+    
+    if (!result.rows || result.rows.length === 0) {
+      throw new Error('User not found');
+    }
+    
     return result.rows[0];
   }
 
@@ -202,8 +217,13 @@ class User {
       paramCount++;
     }
     if (coins !== undefined) {
+      // Ensure coins is a number (convert from string if needed)
+      const coinsValue = typeof coins === 'string' ? parseFloat(coins) : coins;
+      if (isNaN(coinsValue) || coinsValue < 0) {
+        throw new Error('Invalid coins value. Must be a non-negative number.');
+      }
       updates.push(`coins = $${paramCount}`);
-      values.push(coins);
+      values.push(coinsValue);
       paramCount++;
     }
 
@@ -219,12 +239,22 @@ class User {
       RETURNING id, username, email, role, coins, total_earned_coins, created_at, last_active
     `;
     const result = await pool.query(query, values);
+    
+    if (!result.rows || result.rows.length === 0) {
+      throw new Error('User not found');
+    }
+    
     return result.rows[0];
   }
 
   static async delete(userId) {
     const query = 'DELETE FROM users WHERE id = $1 RETURNING id, username';
     const result = await pool.query(query, [userId]);
+    
+    if (!result.rows || result.rows.length === 0) {
+      throw new Error('User not found');
+    }
+    
     return result.rows[0];
   }
 }
