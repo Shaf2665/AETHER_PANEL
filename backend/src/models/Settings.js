@@ -312,11 +312,25 @@ class Settings {
       // Validate and set CPU pricing
       if (pricing.cpu) {
         if (pricing.cpu.per_core !== undefined) {
-          const perCore = Math.max(0.01, Math.min(10000, parseFloat(pricing.cpu.per_core) || 100));
+          const perCoreValue = typeof pricing.cpu.per_core === 'string' ? pricing.cpu.per_core.trim() : pricing.cpu.per_core;
+          if (perCoreValue === '' || perCoreValue === null || perCoreValue === undefined) {
+            throw new Error('CPU per_core value cannot be empty');
+          }
+          const perCore = parseFloat(perCoreValue);
+          if (isNaN(perCore) || perCore < 0.01 || perCore > 10000) {
+            throw new Error(`Invalid CPU per_core value: ${perCoreValue}. Must be between 0.01 and 10000.`);
+          }
           await this.set('resource_pricing_cpu_per_core', String(perCore));
         }
         if (pricing.cpu.per_hour !== undefined) {
-          const perHour = Math.max(0.01, Math.min(1000, parseFloat(pricing.cpu.per_hour) || 5));
+          const perHourValue = typeof pricing.cpu.per_hour === 'string' ? pricing.cpu.per_hour.trim() : pricing.cpu.per_hour;
+          if (perHourValue === '' || perHourValue === null || perHourValue === undefined) {
+            throw new Error('CPU per_hour value cannot be empty');
+          }
+          const perHour = parseFloat(perHourValue);
+          if (isNaN(perHour) || perHour < 0.01 || perHour > 1000) {
+            throw new Error(`Invalid CPU per_hour value: ${perHourValue}. Must be between 0.01 and 1000.`);
+          }
           await this.set('resource_pricing_cpu_per_hour', String(perHour));
         }
       }
@@ -324,11 +338,25 @@ class Settings {
       // Validate and set Memory pricing
       if (pricing.memory) {
         if (pricing.memory.per_gb !== undefined) {
-          const perGb = Math.max(0.01, Math.min(10000, parseFloat(pricing.memory.per_gb) || 200));
+          const perGbValue = typeof pricing.memory.per_gb === 'string' ? pricing.memory.per_gb.trim() : pricing.memory.per_gb;
+          if (perGbValue === '' || perGbValue === null || perGbValue === undefined) {
+            throw new Error('Memory per_gb value cannot be empty');
+          }
+          const perGb = parseFloat(perGbValue);
+          if (isNaN(perGb) || perGb < 0.01 || perGb > 10000) {
+            throw new Error(`Invalid Memory per_gb value: ${perGbValue}. Must be between 0.01 and 10000.`);
+          }
           await this.set('resource_pricing_memory_per_gb', String(perGb));
         }
         if (pricing.memory.per_hour !== undefined) {
-          const perHour = Math.max(0.01, Math.min(1000, parseFloat(pricing.memory.per_hour) || 10));
+          const perHourValue = typeof pricing.memory.per_hour === 'string' ? pricing.memory.per_hour.trim() : pricing.memory.per_hour;
+          if (perHourValue === '' || perHourValue === null || perHourValue === undefined) {
+            throw new Error('Memory per_hour value cannot be empty');
+          }
+          const perHour = parseFloat(perHourValue);
+          if (isNaN(perHour) || perHour < 0.01 || perHour > 1000) {
+            throw new Error(`Invalid Memory per_hour value: ${perHourValue}. Must be between 0.01 and 1000.`);
+          }
           await this.set('resource_pricing_memory_per_hour', String(perHour));
         }
       }
@@ -336,11 +364,25 @@ class Settings {
       // Validate and set Disk pricing
       if (pricing.disk) {
         if (pricing.disk.per_gb !== undefined) {
-          const perGb = Math.max(0.01, Math.min(10000, parseFloat(pricing.disk.per_gb) || 50));
+          const perGbValue = typeof pricing.disk.per_gb === 'string' ? pricing.disk.per_gb.trim() : pricing.disk.per_gb;
+          if (perGbValue === '' || perGbValue === null || perGbValue === undefined) {
+            throw new Error('Disk per_gb value cannot be empty');
+          }
+          const perGb = parseFloat(perGbValue);
+          if (isNaN(perGb) || perGb < 0.01 || perGb > 10000) {
+            throw new Error(`Invalid Disk per_gb value: ${perGbValue}. Must be between 0.01 and 10000.`);
+          }
           await this.set('resource_pricing_disk_per_gb', String(perGb));
         }
         if (pricing.disk.per_hour !== undefined) {
-          const perHour = Math.max(0.01, Math.min(1000, parseFloat(pricing.disk.per_hour) || 2));
+          const perHourValue = typeof pricing.disk.per_hour === 'string' ? pricing.disk.per_hour.trim() : pricing.disk.per_hour;
+          if (perHourValue === '' || perHourValue === null || perHourValue === undefined) {
+            throw new Error('Disk per_hour value cannot be empty');
+          }
+          const perHour = parseFloat(perHourValue);
+          if (isNaN(perHour) || perHour < 0.01 || perHour > 1000) {
+            throw new Error(`Invalid Disk per_hour value: ${perHourValue}. Must be between 0.01 and 1000.`);
+          }
           await this.set('resource_pricing_disk_per_hour', String(perHour));
         }
       }

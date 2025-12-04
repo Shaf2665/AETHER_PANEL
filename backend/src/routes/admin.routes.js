@@ -710,11 +710,18 @@ router.put(
   validate,
   async (req, res, next) => {
     try {
+      console.log('Updating resource pricing:', JSON.stringify(req.body, null, 2));
       await Settings.setResourcePricing(req.body);
       const updatedPricing = await Settings.getResourcePricing();
+      console.log('Resource pricing updated successfully');
       res.json(updatedPricing);
     } catch (error) {
-      next(error);
+      console.error('Error updating resource pricing:', error);
+      // Return user-friendly error message
+      if (error.message) {
+        return res.status(400).json({ error: error.message });
+      }
+      res.status(500).json({ error: 'Failed to update resource pricing' });
     }
   }
 );
