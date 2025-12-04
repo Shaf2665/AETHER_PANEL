@@ -11,6 +11,8 @@ const redis = require('../config/redis');
 
 const router = express.Router();
 
+const isProduction = process.env.NODE_ENV === 'production';
+
 // Stricter rate limiting for revenue endpoints (prevent coin farming)
 const revenueLimiter = rateLimit({
   windowMs: 60 * 1000, // 1 minute
@@ -18,6 +20,16 @@ const revenueLimiter = rateLimit({
   message: 'Too many requests to revenue endpoints, please slow down.',
   standardHeaders: true,
   legacyHeaders: false,
+  // Explicitly acknowledge trust proxy setting
+  trustProxy: isProduction,
+  // Custom key generator for better IP detection behind proxy
+  keyGenerator: (req) => {
+    if (isProduction && req.headers['x-forwarded-for']) {
+      const forwarded = req.headers['x-forwarded-for'].split(',')[0].trim();
+      return forwarded || req.ip;
+    }
+    return req.ip;
+  },
 });
 
 // All routes require authentication and rate limiting

@@ -197,6 +197,7 @@ const Admin = () => {
         toast.success('Coins adjusted successfully');
         queryClient.invalidateQueries('adminUsers');
         queryClient.invalidateQueries('adminStats');
+        queryClient.invalidateQueries('balance'); // Invalidate balance query to refresh navbar coin display
         setCoinAdjustmentModal(false);
         setCoinAmount(0);
         setCoinDescription('');
