@@ -67,6 +67,11 @@ class ServerTemplate {
         sanitized.display_order = parseInt(maxOrderResult.rows[0].next_order) || 0;
       }
       
+      // Ensure gradient_colors is defined before validation
+      if (!sanitized.gradient_colors) {
+        sanitized.gradient_colors = { color1: '#3b82f6', color2: '#06b6d4' };
+      }
+      
       // Validate gradient colors
       const gradientValidation = validateGradientColors(sanitized.gradient_colors);
       if (!gradientValidation.valid) {
@@ -299,6 +304,20 @@ class ServerTemplate {
   static _parseRow(row) {
     if (!row) return null;
     
+    // Parse gradient_colors with error handling
+    let gradientColors;
+    if (typeof row.gradient_colors === 'string') {
+      try {
+        gradientColors = JSON.parse(row.gradient_colors);
+      } catch (error) {
+        console.error('Error parsing gradient_colors JSON:', error);
+        // Use default gradient colors on parse error
+        gradientColors = { color1: '#3b82f6', color2: '#06b6d4' };
+      }
+    } else {
+      gradientColors = row.gradient_colors || { color1: '#3b82f6', color2: '#06b6d4' };
+    }
+    
     return {
       id: row.id,
       name: row.name,
@@ -310,9 +329,7 @@ class ServerTemplate {
       game_type: row.game_type,
       enabled: row.enabled,
       icon: row.icon,
-      gradient_colors: typeof row.gradient_colors === 'string' 
-        ? JSON.parse(row.gradient_colors) 
-        : row.gradient_colors,
+      gradient_colors: gradientColors,
       display_order: row.display_order,
       created_at: row.created_at,
       updated_at: row.updated_at,
@@ -364,9 +381,17 @@ class ServerTemplate {
     }
     
     if (data.gradient_colors !== undefined) {
-      sanitized.gradient_colors = typeof data.gradient_colors === 'string'
-        ? JSON.parse(data.gradient_colors)
-        : data.gradient_colors;
+      if (typeof data.gradient_colors === 'string') {
+        try {
+          sanitized.gradient_colors = JSON.parse(data.gradient_colors);
+        } catch (error) {
+          console.error('Error parsing gradient_colors JSON in sanitize:', error);
+          // Use existing gradient_colors or default if parse fails
+          sanitized.gradient_colors = existing.gradient_colors || { color1: '#3b82f6', color2: '#06b6d4' };
+        }
+      } else {
+        sanitized.gradient_colors = data.gradient_colors;
+      }
     }
     
     if (data.display_order !== undefined) {

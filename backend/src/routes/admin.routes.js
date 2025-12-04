@@ -672,10 +672,199 @@ router.post('/system/update', updateRateLimit, async (req, res, next) => {
       message: 'Update started',
       status: 'in_progress'
     });
+    } catch (error) {
+    next(error);
+  }
+});
+
+// Store Management Routes
+
+// Get resource pricing
+router.get('/store/pricing', async (req, res, next) => {
+  try {
+    const pricing = await Settings.getResourcePricing();
+    res.json(pricing);
   } catch (error) {
     next(error);
   }
 });
+
+// Update resource pricing
+router.put(
+  '/store/pricing',
+  storeRateLimit,
+  [
+    body('cpu.per_core').optional().isFloat({ min: 0.01, max: 10000 }),
+    body('cpu.per_hour').optional().isFloat({ min: 0.01, max: 1000 }),
+    body('memory.per_gb').optional().isFloat({ min: 0.01, max: 10000 }),
+    body('memory.per_hour').optional().isFloat({ min: 0.01, max: 1000 }),
+    body('disk.per_gb').optional().isFloat({ min: 0.01, max: 10000 }),
+    body('disk.per_hour').optional().isFloat({ min: 0.01, max: 1000 }),
+  ],
+  validate,
+  async (req, res, next) => {
+    try {
+      await Settings.setResourcePricing(req.body);
+      const updatedPricing = await Settings.getResourcePricing();
+      res.json(updatedPricing);
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+// Get all server templates
+router.get('/store/templates', async (req, res, next) => {
+  try {
+    const templates = await ServerTemplate.findAll();
+    res.json(templates);
+  } catch (error) {
+    next(error);
+  }
+});
+
+// Get single server template
+router.get('/store/templates/:id', [param('id').isUUID()], validate, async (req, res, next) => {
+  try {
+    const template = await ServerTemplate.findById(req.params.id);
+    if (!template) {
+      return res.status(404).json({ error: 'Template not found' });
+    }
+    res.json(template);
+  } catch (error) {
+    next(error);
+  }
+});
+
+// Create server template
+router.post(
+  '/store/templates',
+  storeRateLimit,
+  [
+    body('name').trim().isLength({ min: 1, max: 100 }),
+    body('description').optional().trim().isLength({ max: 500 }),
+    body('cpu_cores').isInt({ min: 1, max: 100 }),
+    body('ram_gb').isInt({ min: 1, max: 1000 }),
+    body('disk_gb').isInt({ min: 1, max: 10000 }),
+    body('price').isFloat({ min: 0.01, max: 1000000 }),
+    body('game_type').isIn(['minecraft', 'fivem', 'other']),
+    body('enabled').optional().isBoolean(),
+    body('icon').trim().isLength({ min: 1 }),
+    body('gradient_colors').isObject(),
+    body('display_order').optional().isInt({ min: 0 }),
+  ],
+  validate,
+  async (req, res, next) => {
+    try {
+      // Validate icon
+      if (!validateIcon(req.body.icon)) {
+        return res.status(400).json({ error: 'Invalid icon name. Icon must be from the allowed whitelist.' });
+      }
+
+      // Validate gradient colors
+      const gradientValidation = validateGradientColors(req.body.gradient_colors);
+      if (!gradientValidation.valid) {
+        return res.status(400).json({ error: gradientValidation.error });
+      }
+
+      // Use sanitized gradient colors
+      req.body.gradient_colors = gradientValidation.sanitized;
+
+      const template = await ServerTemplate.create(req.body);
+      res.status(201).json(template);
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+// Update server template
+router.put(
+  '/store/templates/:id',
+  storeRateLimit,
+  [
+    param('id').isUUID(),
+    body('name').optional().trim().isLength({ min: 1, max: 100 }),
+    body('description').optional().trim().isLength({ max: 500 }),
+    body('cpu_cores').optional().isInt({ min: 1, max: 100 }),
+    body('ram_gb').optional().isInt({ min: 1, max: 1000 }),
+    body('disk_gb').optional().isInt({ min: 1, max: 10000 }),
+    body('price').optional().isFloat({ min: 0.01, max: 1000000 }),
+    body('game_type').optional().isIn(['minecraft', 'fivem', 'other']),
+    body('enabled').optional().isBoolean(),
+    body('icon').optional().trim().isLength({ min: 1 }),
+    body('gradient_colors').optional().isObject(),
+    body('display_order').optional().isInt({ min: 0 }),
+  ],
+  validate,
+  async (req, res, next) => {
+    try {
+      // Validate icon if provided
+      if (req.body.icon && !validateIcon(req.body.icon)) {
+        return res.status(400).json({ error: 'Invalid icon name. Icon must be from the allowed whitelist.' });
+      }
+
+      // Validate gradient colors if provided
+      if (req.body.gradient_colors) {
+        const gradientValidation = validateGradientColors(req.body.gradient_colors);
+        if (!gradientValidation.valid) {
+          return res.status(400).json({ error: gradientValidation.error });
+        }
+        req.body.gradient_colors = gradientValidation.sanitized;
+      }
+
+      const template = await ServerTemplate.update(req.params.id, req.body);
+      if (!template) {
+        return res.status(404).json({ error: 'Template not found' });
+      }
+      res.json(template);
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+// Delete server template
+router.delete('/store/templates/:id', storeRateLimit, [param('id').isUUID()], validate, async (req, res, next) => {
+  try {
+    // Check if template is in use
+    const isInUse = await ServerTemplate.checkTemplateUsage(req.params.id);
+    if (isInUse) {
+      return res.status(400).json({
+        error: 'Cannot delete template',
+        message: 'This template is currently in use by one or more servers. Please remove or update those servers first.',
+      });
+    }
+
+    const deleted = await ServerTemplate.delete(req.params.id);
+    if (!deleted) {
+      return res.status(404).json({ error: 'Template not found' });
+    }
+    res.json({ message: 'Template deleted successfully' });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// Reorder server templates
+router.put(
+  '/store/templates/reorder',
+  storeRateLimit,
+  [
+    body('templates').isArray({ min: 1 }),
+    body('templates.*.id').isUUID(),
+    body('templates.*.display_order').isInt({ min: 0 }),
+  ],
+  validate,
+  async (req, res, next) => {
+    try {
+      const templates = await ServerTemplate.reorder(req.body.templates);
+      res.json(templates);
+    } catch (error) {
+      next(error);
+    }
+  }
+);
 
 module.exports = router;
 
