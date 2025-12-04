@@ -13,6 +13,22 @@ const router = express.Router();
 
 const isProduction = process.env.NODE_ENV === 'production';
 
+// Helper function to get client IP (prioritizes Cloudflare header)
+const getClientIP = (req) => {
+  if (isProduction) {
+    // Prefer Cloudflare's connecting IP header (most reliable)
+    if (req.headers['cf-connecting-ip']) {
+      return req.headers['cf-connecting-ip'];
+    }
+    // Fallback to X-Forwarded-For
+    if (req.headers['x-forwarded-for']) {
+      const forwarded = req.headers['x-forwarded-for'].split(',')[0].trim();
+      return forwarded || req.ip;
+    }
+  }
+  return req.ip;
+};
+
 // Stricter rate limiting for revenue endpoints (prevent coin farming)
 const revenueLimiter = rateLimit({
   windowMs: 60 * 1000, // 1 minute
@@ -23,13 +39,7 @@ const revenueLimiter = rateLimit({
   // Explicitly acknowledge trust proxy setting
   trustProxy: isProduction,
   // Custom key generator for better IP detection behind proxy
-  keyGenerator: (req) => {
-    if (isProduction && req.headers['x-forwarded-for']) {
-      const forwarded = req.headers['x-forwarded-for'].split(',')[0].trim();
-      return forwarded || req.ip;
-    }
-    return req.ip;
-  },
+  keyGenerator: (req) => getClientIP(req),
 });
 
 // All routes require authentication and rate limiting

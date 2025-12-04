@@ -2,6 +2,22 @@ const rateLimit = require('express-rate-limit');
 
 const isProduction = process.env.NODE_ENV === 'production';
 
+// Helper function to get client IP (prioritizes Cloudflare header)
+const getClientIP = (req) => {
+  if (isProduction) {
+    // Prefer Cloudflare's connecting IP header (most reliable)
+    if (req.headers['cf-connecting-ip']) {
+      return req.headers['cf-connecting-ip'];
+    }
+    // Fallback to X-Forwarded-For
+    if (req.headers['x-forwarded-for']) {
+      const forwarded = req.headers['x-forwarded-for'].split(',')[0].trim();
+      return forwarded || req.ip;
+    }
+  }
+  return req.ip;
+};
+
 /**
  * Rate limiting middleware for store management endpoints
  * Limits store management requests to 10 per minute per IP
@@ -17,13 +33,7 @@ const storeRateLimit = rateLimit({
   // Explicitly acknowledge trust proxy setting
   trustProxy: isProduction,
   // Custom key generator for better IP detection behind proxy
-  keyGenerator: (req) => {
-    if (isProduction && req.headers['x-forwarded-for']) {
-      const forwarded = req.headers['x-forwarded-for'].split(',')[0].trim();
-      return forwarded || req.ip;
-    }
-    return req.ip;
-  },
+  keyGenerator: (req) => getClientIP(req),
 });
 
 module.exports = { storeRateLimit };

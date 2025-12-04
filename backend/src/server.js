@@ -71,6 +71,22 @@ if (isProduction) {
 app.use(cors(corsOptions));
 
 // Rate limiting
+// Helper function to get client IP (prioritizes Cloudflare header)
+const getClientIP = (req) => {
+  if (isProduction) {
+    // Prefer Cloudflare's connecting IP header (most reliable)
+    if (req.headers['cf-connecting-ip']) {
+      return req.headers['cf-connecting-ip'];
+    }
+    // Fallback to X-Forwarded-For
+    if (req.headers['x-forwarded-for']) {
+      const forwarded = req.headers['x-forwarded-for'].split(',')[0].trim();
+      return forwarded || req.ip;
+    }
+  }
+  return req.ip;
+};
+
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: 60, // limit each IP to 60 requests per windowMs (reduced from 100)
@@ -80,33 +96,28 @@ const limiter = rateLimit({
   // Explicitly acknowledge trust proxy setting to prevent ValidationError
   trustProxy: isProduction,
   // Custom key generator for better IP detection behind proxy
-  keyGenerator: (req) => {
-    // In production with trust proxy, use X-Forwarded-For header
-    if (isProduction && req.headers['x-forwarded-for']) {
-      const forwarded = req.headers['x-forwarded-for'].split(',')[0].trim();
-      return forwarded || req.ip;
-    }
-    return req.ip;
-  },
+  keyGenerator: (req) => getClientIP(req),
 });
-app.use('/api/', limiter);
+
+// Apply general limiter to API routes, but skip auth routes (they have their own limiter)
+app.use('/api/', (req, res, next) => {
+  // Skip general limiter for auth routes (they have their own stricter limiter)
+  if (req.path.startsWith('/auth')) {
+    return next();
+  }
+  limiter(req, res, next);
+});
 
 // Stricter rate limiting for authentication endpoints
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 10, // 10 attempts per 15 minutes (increased from 5 to prevent blocking legitimate logins)
+  max: 20, // 20 attempts per 15 minutes (increased to prevent blocking legitimate logins)
   message: 'Too many authentication attempts, please try again later.',
   standardHeaders: true,
   legacyHeaders: false,
   // Explicitly acknowledge trust proxy setting
   trustProxy: isProduction,
-  keyGenerator: (req) => {
-    if (isProduction && req.headers['x-forwarded-for']) {
-      const forwarded = req.headers['x-forwarded-for'].split(',')[0].trim();
-      return forwarded || req.ip;
-    }
-    return req.ip;
-  },
+  keyGenerator: (req) => getClientIP(req),
 });
 
 // Stricter rate limiting for revenue endpoints (prevent coin farming)
