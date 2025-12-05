@@ -200,7 +200,7 @@ router.post(
         const pterodactylUserId = parseInt(process.env.PTERODACTYL_DEFAULT_USER_ID || '1');
         
         // Determine nest ID and egg ID based on game type
-        let nestId, eggId, startup;
+        let nestId, eggId, startup, environment = {};
         
         if (game_type === 'minecraft') {
           // Minecraft uses default nest ID and Minecraft egg ID
@@ -218,6 +218,13 @@ router.post(
           }
           
           startup = 'java -Xms128M -Xmx{{SERVER_MEMORY}}M -jar {{SERVER_JARFILE}}';
+          
+          // Set required environment variables for Minecraft servers
+          environment = {
+            SERVER_JARFILE: 'server.jar',  // Default jar file (can be overridden by egg configuration)
+            EULA: 'TRUE',  // Accept EULA automatically
+            SERVER_MEMORY: memory_limit.toString(),  // Set memory from server config
+          };
         } else {
           // Find custom game
           const customGames = config.customGames || [];
@@ -240,7 +247,10 @@ router.post(
             throw new Error(`Egg ID for custom game '${game_type}' is not configured. Please check your Pterodactyl Configuration.`);
           }
           
-          startup = ''; // Custom games may have their own startup commands
+          startup = customGame.startup || ''; // Use custom startup command if provided
+          // Custom games may have their own environment variables
+          // For now, leave empty - can be extended later if needed
+          environment = customGame.environment || {};
         }
         
         // Final validation before API call
@@ -275,7 +285,7 @@ router.post(
           eggId: eggId,
           dockerImage: 'ghcr.io/pterodactyl/games:latest',
           startup: startup,
-          environment: {},
+          environment: environment,
         });
         
         // Extract server identifier from Pterodactyl response
