@@ -116,7 +116,8 @@ class PterodactylService {
         default: 1,
       },
       nest_id: parseInt(nestId, 10),
-      egg_id: parseInt(eggId, 10),
+      egg: parseInt(eggId, 10),  // Changed from egg_id to egg (Pterodactyl API expects 'egg')
+      node_id: parseInt(nodeId, 10),  // Added node_id (required by Pterodactyl API)
       docker_image: dockerImage || 'ghcr.io/pterodactyl/games:latest',
       startup,
       environment: environment || {},
@@ -126,7 +127,8 @@ class PterodactylService {
       name,
       userId,
       nest_id: serverData.nest_id,
-      egg_id: serverData.egg_id,
+      egg: serverData.egg,  // Changed from egg_id to egg
+      node_id: serverData.node_id,  // Added node_id
       nodeId: nodeId
     });
 
