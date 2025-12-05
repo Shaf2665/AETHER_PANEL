@@ -180,7 +180,17 @@ router.post(
         
         // Validate config is loaded
         if (!config) {
+          console.error('Pterodactyl config is null or undefined');
           throw new Error('Failed to load Pterodactyl configuration. Please check your settings in Admin Panel > Settings > Pterodactyl Configuration.');
+        }
+        
+        // Validate essential config values
+        if (!config.baseUrl || !config.applicationApiKey) {
+          console.error('Pterodactyl config missing essential values:', {
+            hasBaseUrl: !!config.baseUrl,
+            hasApplicationApiKey: !!config.applicationApiKey
+          });
+          throw new Error('Pterodactyl configuration is incomplete. Please configure Panel URL and Application API Key in Admin Panel > Settings > Pterodactyl Configuration.');
         }
         
         // Get Pterodactyl user ID
@@ -316,9 +326,22 @@ router.post(
         });
       } catch (error) {
         await client.query('ROLLBACK');
+        console.error('Error during server creation (transaction rolled back):', {
+          error: error.message,
+          stack: error.stack,
+          game_type,
+          userId: req.user.id,
+          username: req.user.username
+        });
         throw error;
       }
     } catch (error) {
+      console.error('Error in server creation route:', {
+        error: error.message,
+        stack: error.stack,
+        userId: req.user?.id,
+        body: req.body
+      });
       next(error);
     } finally {
       client.release();

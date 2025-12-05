@@ -22,13 +22,22 @@ async function getConfig() {
     const dbConfig = await Settings.getPterodactylConfig();
     
     // Ensure eggIds.minecraft is properly parsed as integer
-    const minecraftEggId = dbConfig.eggIds?.minecraft 
-      ? parseInt(dbConfig.eggIds.minecraft, 10)
-      : parseInt(process.env.PTERODACTYL_EGG_ID_MINECRAFT || process.env.PTERODACTYL_EGG_ID || '1', 10);
+    let minecraftEggId;
+    if (dbConfig.eggIds && dbConfig.eggIds.minecraft !== undefined && dbConfig.eggIds.minecraft !== null) {
+      minecraftEggId = parseInt(dbConfig.eggIds.minecraft, 10);
+      if (isNaN(minecraftEggId) || minecraftEggId < 1) {
+        console.warn('Invalid Minecraft Egg ID from database, using env var fallback:', dbConfig.eggIds.minecraft);
+        minecraftEggId = parseInt(process.env.PTERODACTYL_EGG_ID_MINECRAFT || process.env.PTERODACTYL_EGG_ID || '1', 10);
+      }
+    } else {
+      console.warn('Minecraft Egg ID not found in database config, using env var fallback');
+      minecraftEggId = parseInt(process.env.PTERODACTYL_EGG_ID_MINECRAFT || process.env.PTERODACTYL_EGG_ID || '1', 10);
+    }
     
-    // Validate minecraftEggId
+    // Final validation
     if (isNaN(minecraftEggId) || minecraftEggId < 1) {
-      console.warn('Invalid Minecraft Egg ID, using default:', minecraftEggId);
+      console.error('CRITICAL: Invalid Minecraft Egg ID after all fallbacks:', minecraftEggId);
+      minecraftEggId = 1; // Last resort default
     }
     
     cachedConfig = {
