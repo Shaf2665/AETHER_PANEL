@@ -301,7 +301,13 @@ const Admin = () => {
             setPterodactylSettings(prev => ({ ...prev, nodeId: data.options.nodes[0].id }));
           }
           if (data.options.nests.length === 1) {
-            setPterodactylSettings(prev => ({ ...prev, nestId: data.options.nests[0].id }));
+            const firstNestId = data.options.nests[0].id;
+            const firstEggId = data.options.eggsByNest[firstNestId]?.[0]?.id || 1;
+            setPterodactylSettings(prev => ({ 
+              ...prev, 
+              nestId: firstNestId,
+              eggIdMinecraft: firstEggId
+            }));
           }
           if (data.options.users.length === 1) {
             setPterodactylSettings(prev => ({ ...prev, defaultUserId: data.options.users[0].id }));
@@ -951,7 +957,13 @@ const Admin = () => {
                           value={pterodactylSettings.nestId}
                           onChange={(e) => {
                             const newNestId = parseInt(e.target.value) || 1;
-                            setPterodactylSettings({ ...pterodactylSettings, nestId: newNestId });
+                            // Reset eggId when nest changes to first egg of new nest (if available)
+                            const firstEggId = pterodactylOptions.eggsByNest[newNestId]?.[0]?.id || 1;
+                            setPterodactylSettings({ 
+                              ...pterodactylSettings, 
+                              nestId: newNestId,
+                              eggIdMinecraft: firstEggId
+                            });
                           }}
                           className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                           required
@@ -982,20 +994,18 @@ const Admin = () => {
                       <label className="block text-sm font-medium text-gray-700 mb-2">
                         Minecraft Egg ID
                       </label>
-                      {Object.keys(pterodactylOptions.eggsByNest).length > 0 ? (
+                      {pterodactylOptions.eggsByNest[pterodactylSettings.nestId] && pterodactylOptions.eggsByNest[pterodactylSettings.nestId].length > 0 ? (
                         <select
                           value={pterodactylSettings.eggIdMinecraft}
                           onChange={(e) => setPterodactylSettings({ ...pterodactylSettings, eggIdMinecraft: parseInt(e.target.value) || 1 })}
                           className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                           required
                         >
-                          {Object.entries(pterodactylOptions.eggsByNest).flatMap(([nestId, eggs]) =>
-                            eggs.map((egg) => (
-                              <option key={`${nestId}-${egg.id}`} value={egg.id}>
-                                {egg.name} (ID: {egg.id})
-                              </option>
-                            ))
-                          )}
+                          {pterodactylOptions.eggsByNest[pterodactylSettings.nestId].map((egg) => (
+                            <option key={egg.id} value={egg.id}>
+                              {egg.name} (ID: {egg.id})
+                            </option>
+                          ))}
                         </select>
                       ) : (
                         <input
@@ -1008,8 +1018,8 @@ const Admin = () => {
                           required
                         />
                       )}
-                      {Object.keys(pterodactylOptions.eggsByNest).length === 0 && (
-                        <p className="mt-1 text-xs text-gray-500">Click "Test Connection & Fetch Options" to load available eggs</p>
+                      {(!pterodactylOptions.eggsByNest[pterodactylSettings.nestId] || pterodactylOptions.eggsByNest[pterodactylSettings.nestId].length === 0) && (
+                        <p className="mt-1 text-xs text-gray-500">Click "Test Connection & Fetch Options" to load available eggs for the selected nest</p>
                       )}
                     </div>
 
